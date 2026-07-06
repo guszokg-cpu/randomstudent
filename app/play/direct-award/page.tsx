@@ -257,7 +257,7 @@ export default function DirectAwardPage() {
             </div>
 
             {targetMode === "student" ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 {filteredStudents.map((student) => {
                   const active = selectedStudentIds.includes(student.id);
                   const totalStars = sumStudentStars(data.starEvents, student.id, subjectId || null);
@@ -266,34 +266,58 @@ export default function DirectAwardPage() {
                       key={student.id}
                       type="button"
                       className={cn(
-                        "relative overflow-hidden rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg",
+                        "group relative overflow-hidden rounded-[1.5rem] border p-4 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl sm:p-5",
                         active
-                          ? "border-pink-400 bg-gradient-to-br from-pink-100 via-fuchsia-50 to-violet-100 shadow-xl shadow-pink-500/20 ring-4 ring-pink-200"
-                          : "border-violet-100 bg-white"
+                          ? "border-pink-300 bg-gradient-to-br from-pink-50 via-white to-violet-50 shadow-xl shadow-pink-500/20 ring-4 ring-pink-200"
+                          : "border-violet-100 bg-gradient-to-br from-white via-white to-violet-50/60 hover:border-violet-200"
                       )}
                       onClick={() => toggleStudent(student.id)}
                     >
+                      <span className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-amber-200/25 blur-2xl transition group-hover:bg-amber-200/40" />
                       {active ? (
-                        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-pink-600 px-2.5 py-1 text-xs font-black text-white shadow-md">
+                        <div className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black text-white shadow-md">
                           <CheckCircle2 className="h-4 w-4" />
                           เลือกแล้ว
                         </div>
                       ) : null}
-                      <div className="flex items-center gap-3">
-                        <StudentAvatar name={student.full_name} photoUrl={student.photo_url} size="sm" />
-                        <div className="min-w-0 pr-20">
-                          <p className={cn("truncate text-lg font-black", active ? "text-pink-950" : "text-violet-950")}>{student.nickname}</p>
-                          <p className={cn("truncate text-xs font-bold", active ? "text-pink-700" : "text-slate-500")}>เลขที่ {student.student_number} · {student.full_name}</p>
+                      <div className="relative grid gap-4 sm:grid-cols-[132px_1fr] sm:items-center">
+                        <div className="rounded-[1.35rem] bg-gradient-to-br from-violet-100 via-white to-amber-50 p-2 shadow-inner ring-1 ring-violet-100">
+                          <StudentAvatar
+                            name={student.full_name}
+                            photoUrl={student.photo_url}
+                            size="lg"
+                            shape="rounded"
+                            className="aspect-[4/3] h-28 w-full rounded-[1rem] border-2 border-white object-cover shadow-md sm:h-32"
+                          />
                         </div>
-                      </div>
-                      <div
-                        className={cn(
-                          "mt-3 flex items-center justify-between rounded-xl px-3 py-2 text-sm font-black",
-                          active ? "bg-white/90 text-pink-700 ring-1 ring-pink-200" : "bg-amber-50 text-amber-700"
-                        )}
-                      >
-                        ดาวสะสม
-                        <span>{formatStars(totalStars)} ⭐</span>
+
+                        <div className="min-w-0">
+                          <p className={cn("truncate text-3xl font-black leading-tight sm:pr-24", active ? "text-pink-950" : "text-violet-950")}>
+                            {student.nickname}
+                          </p>
+                          <p className={cn("mt-2 line-clamp-2 text-sm font-bold leading-relaxed", active ? "text-pink-700" : "text-slate-500")}>
+                            เลขที่ {student.student_number} <span className="px-1 text-violet-300">•</span> {student.full_name}
+                          </p>
+                          <div
+                            className={cn(
+                              "mt-4 flex items-center justify-between rounded-2xl border px-3 py-2.5 text-sm font-black shadow-inner sm:px-4",
+                              active
+                                ? "border-pink-100 bg-white/90 text-pink-700"
+                                : "border-amber-100 bg-gradient-to-r from-amber-50 via-yellow-50 to-white text-amber-800"
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="grid h-8 w-8 place-items-center rounded-full bg-amber-100 text-amber-500 ring-1 ring-amber-200">
+                                <Star className="h-4 w-4 fill-current" />
+                              </span>
+                              ดาวสะสม
+                            </span>
+                            <span className="flex items-center gap-2 text-2xl font-black text-orange-600">
+                              {formatStars(totalStars)}
+                              <Star className="h-6 w-6 fill-amber-400 text-amber-400 drop-shadow-sm" />
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </button>
                   );
