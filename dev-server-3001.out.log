@@ -1,0 +1,15 @@
+
+> suum-sanuk-dao-nakkhit@0.1.0 dev
+> next dev --webpack -H 127.0.0.1 -p 3001
+
+▲ Next.js 16.2.10 (webpack)
+- Local:         http://127.0.0.1:3001
+- Network:       http://127.0.0.1:3001
+- Environments: .env.local
+✓ Ready in 323ms
+
+○ Compiling /login ...
+ GET /login?next=%2Freports 200 in 13.0s (next.js: 12.3s, application-code: 743ms)
+ GET /play/direct-award?activity=%E0%B9%82%E0%B8%88%E0%B8%97%E0%B8%A2%E0%B9%8C%E0%B8%94%E0%B8%B2%E0%B8%A7%E0%B8%99%E0%B8%B1%E0%B8%81%E0%B8%84%E0%B8%B4%E0%B8%94&repeat=unique 200 in 13.0s (next.js: 12.3s, application-code: 745ms)
+ GET /play 200 in 13.0s (next.js: 12.3s, application-code: 755ms)
+ GET /play/direct-award?activity=test&repeat=unique 200 in 94ms (next.js: 9ms, application-code: 85ms)
