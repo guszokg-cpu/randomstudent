@@ -7,7 +7,7 @@ import { StudentAvatar } from "@/components/admin/student-avatar";
 import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextArea, TextInput } from "@/components/ui/fields";
 import { PageCard } from "@/components/ui/page-card";
-import { classroomStudents, primaryStudentPhoto, studentGroup, studentPhotoGallery, sumStudentStars } from "@/lib/calculations";
+import { classroomAllStudents, primaryStudentPhoto, studentGroup, studentPhotoGallery, sumStudentStars } from "@/lib/calculations";
 import { downloadStudentExcelTemplate, parseStudentExcelFile } from "@/lib/student-excel";
 import type { StudentImportResult } from "@/lib/student-import";
 import type { Student, StudentDraft, StudentPhoto } from "@/lib/types";
@@ -15,6 +15,7 @@ import { formatStars } from "@/lib/utils";
 import { useData } from "@/components/providers/data-provider";
 
 const maxPhotosPerStudent = 5;
+type StudentStatusFilter = "all" | "active" | "inactive";
 
 function selectedClassroomFromUrl() {
   if (typeof window === "undefined") return null;
@@ -56,6 +57,7 @@ export default function StudentsPage() {
   const [importText, setImportText] = useState("1 เด็กชายก้อง\n2 เด็กหญิงแพรว");
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<StudentImportResult | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StudentStatusFilter>("all");
   const [formError, setFormError] = useState("");
   const [formNotice, setFormNotice] = useState("");
   const [excelBusy, setExcelBusy] = useState(false);
@@ -84,7 +86,13 @@ export default function StudentsPage() {
   }, [photoFiles]);
 
   const groups = useMemo(() => data.groups.filter((group) => group.classroom_id === classroomId), [data.groups, classroomId]);
-  const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroomStudentRows = useMemo(() => classroomAllStudents(data.students, classroomId), [data.students, classroomId]);
+  const activeStudentCount = classroomStudentRows.filter((student) => student.status === "active").length;
+  const inactiveStudentCount = classroomStudentRows.length - activeStudentCount;
+  const students = useMemo(
+    () => classroomStudentRows.filter((student) => statusFilter === "all" || student.status === statusFilter),
+    [classroomStudentRows, statusFilter]
+  );
   const selectedClassroom = data.classrooms.find((classroom) => classroom.id === classroomId);
   const editingPhotos = useMemo(() => (editing ? studentPhotoGallery(data.studentPhotos, editing) : []), [data.studentPhotos, editing]);
   const mainPhotoPreview = editing ? primaryStudentPhoto(data.studentPhotos, editing) : photoPreviewUrls[0] ?? null;
@@ -643,8 +651,34 @@ export default function StudentsPage() {
       </section>
 
       <PageCard>
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-violet-50/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-black text-violet-950">รายชื่อนักเรียนในห้องนี้</p>
+            <p className="text-xs font-bold text-slate-500">
+              แสดงทั้งหมด {classroomStudentRows.length} คน · เปิดใช้งาน {activeStudentCount} คน · ปิดใช้งาน {inactiveStudentCount} คน
+            </p>
+          </div>
+          <div className="grid grid-cols-3 rounded-xl bg-white p-1 shadow-sm ring-1 ring-violet-100">
+            {[
+              { value: "all", label: "ทั้งหมด" },
+              { value: "active", label: "เปิดใช้งาน" },
+              { value: "inactive", label: "ปิดใช้งาน" }
+            ].map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={`rounded-lg px-3 py-2 text-xs font-black transition ${
+                  statusFilter === item.value ? "bg-violet-700 text-white shadow-sm" : "text-slate-500 hover:bg-violet-50 hover:text-violet-800"
+                }`}
+                onClick={() => setStatusFilter(item.value as StudentStatusFilter)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {students.length === 0 ? (
-          <EmptyState title="ยังไม่มีนักเรียนในห้องนี้" />
+          <EmptyState title={classroomStudentRows.length === 0 ? "ยังไม่มีนักเรียนในห้องนี้" : "ไม่พบนักเรียนตามสถานะที่เลือก"} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] border-separate border-spacing-y-2 text-left">
@@ -665,7 +699,7 @@ export default function StudentsPage() {
                 {students.map((student) => {
                   const group = studentGroup(data.groups, student);
                   return (
-                    <tr key={student.id} className="bg-white shadow-sm">
+                    <tr key={student.id} className={student.status === "inactive" ? "bg-slate-50 shadow-sm opacity-85" : "bg-white shadow-sm"}>
                       <td className="rounded-l-2xl px-3 py-3 font-black">{student.student_number}</td>
                       <td className="px-3 py-3 text-sm font-bold text-slate-500">{student.student_code}</td>
                       <td className="px-3 py-3">
@@ -680,9 +714,16 @@ export default function StudentsPage() {
                       </td>
                       <td className="px-3 py-3 font-black text-amber-500">{formatStars(sumStudentStars(data.starEvents, student.id))} ⭐</td>
                       <td className="px-3 py-3">
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-600">
+                        <span
+                          className={
+                            student.status === "active"
+                              ? "rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-600"
+                              : "rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500"
+                          }
+                        >
                           {student.status === "active" ? "เปิดใช้งาน" : "ปิดใช้งาน"}
                         </span>
+                        {student.status === "inactive" ? <p className="mt-1 text-[11px] font-bold text-slate-400">ไม่เข้าร่วมการสุ่ม</p> : null}
                       </td>
                       <td className="rounded-r-2xl px-3 py-3">
                         <div className="flex justify-end gap-2">

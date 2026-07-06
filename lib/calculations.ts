@@ -7,6 +7,12 @@ export function classroomStudents(students: Student[], classroomId: string) {
     .sort((a, b) => a.student_number - b.student_number);
 }
 
+export function classroomAllStudents(students: Student[], classroomId: string) {
+  return students
+    .filter((student) => student.classroom_id === classroomId)
+    .sort((a, b) => a.student_number - b.student_number);
+}
+
 export function classroomGroups(groups: Group[], classroomId: string) {
   return groups.filter((group) => group.classroom_id === classroomId);
 }
