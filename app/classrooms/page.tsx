@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { Edit3, Trash2, Users, UsersRound } from "lucide-react";
+import { Edit3, Trash2, Users, UsersRound, X } from "lucide-react";
 import { EmptyState } from "@/components/admin/empty-state";
 import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextInput } from "@/components/ui/fields";
@@ -54,6 +54,11 @@ export default function ClassroomsPage() {
     const studentCount = data.students.filter((student) => student.classroom_id === classroom.id).length;
     if (!confirm(`ลบห้อง ${classroom.name} และข้อมูลที่เกี่ยวข้องหรือไม่? มีนักเรียน ${studentCount} คน`)) return;
     await deleteClassroom(classroom.id);
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setDraft(initialDraft);
   }
 
   return (
@@ -137,19 +142,19 @@ export default function ClassroomsPage() {
                       <td className="rounded-r-2xl px-3 py-4">
                         <div className="flex justify-end gap-2">
                           <Link href={`/students?classroom=${classroom.id}`}>
-                            <Button variant="light">
+                            <Button variant="light" title={`จัดการนักเรียนห้อง ${classroom.name}`}>
                               <Users className="h-4 w-4" />
                             </Button>
                           </Link>
                           <Link href={`/groups?classroom=${classroom.id}`}>
-                            <Button variant="light">
+                            <Button variant="light" title={`จัดกลุ่มห้อง ${classroom.name}`}>
                               <UsersRound className="h-4 w-4" />
                             </Button>
                           </Link>
-                          <Button variant="light" onClick={() => startEdit(classroom)}>
+                          <Button type="button" variant="light" title={`แก้ไขห้อง ${classroom.name}`} onClick={() => startEdit(classroom)}>
                             <Edit3 className="h-4 w-4" />
                           </Button>
-                          <Button variant="danger" onClick={() => void handleDelete(classroom)}>
+                          <Button type="button" variant="danger" title={`ลบห้อง ${classroom.name}`} onClick={() => void handleDelete(classroom)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -162,6 +167,66 @@ export default function ClassroomsPage() {
           </div>
         )}
       </PageCard>
+
+      {editing ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-violet-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <form
+            className="w-full max-w-2xl rounded-[1.75rem] bg-white p-6 shadow-2xl shadow-violet-950/25 ring-1 ring-violet-100"
+            onSubmit={onSubmit}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-violet-600">แก้ไขข้อมูลห้องเรียน</p>
+                <h2 className="text-2xl font-black text-violet-950">แก้ไขชื่อห้องเรียน</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">ปรับชื่อ ระดับชั้น ปีการศึกษา หรือสถานะของห้องนี้</p>
+              </div>
+              <Button type="button" variant="light" className="h-11 w-11 px-0" title="ปิดหน้าต่างแก้ไข" onClick={cancelEdit}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>ชื่อห้องเรียน</Label>
+                <TextInput
+                  value={draft.name}
+                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                  placeholder="เช่น ป.4/1"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label>ระดับชั้น</Label>
+                <TextInput value={draft.grade_level} onChange={(event) => setDraft({ ...draft, grade_level: event.target.value })} placeholder="ป.4" />
+              </div>
+              <div>
+                <Label>ปีการศึกษา</Label>
+                <TextInput
+                  value={draft.academic_year}
+                  onChange={(event) => setDraft({ ...draft, academic_year: event.target.value })}
+                  placeholder="2569"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Label>สถานะ</Label>
+                <SelectInput value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as ClassroomDraft["status"] })}>
+                  <option value="active">เปิดใช้งาน</option>
+                  <option value="inactive">ปิดใช้งาน</option>
+                </SelectInput>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button type="button" variant="ghost" onClick={cancelEdit}>
+                ยกเลิก
+              </Button>
+              <Button type="submit" disabled={saving}>
+                บันทึกการแก้ไข
+              </Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
