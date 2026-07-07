@@ -8,7 +8,7 @@ import { Label, SelectInput, TextInput } from "@/components/ui/fields";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
 import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { classroomGroups, classroomStudents } from "@/lib/calculations";
-import type { RepeatMode } from "@/lib/repeat-mode";
+import { repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
 import { readTeachingSession, saveTeachingSession, type TeachingSessionDraft } from "@/lib/teaching-session";
 import { buildPlayHref } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
@@ -43,22 +43,28 @@ export default function PlayPage() {
     if (!firstClassroomId) return;
 
     const saved = readTeachingSession();
+    const query = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
+    const queryClassroomId = query.get("classroom") ?? "";
+    const querySubjectId = query.get("subject") ?? "";
+    const queryClassroomExists = data.classrooms.some((classroom) => classroom.id === queryClassroomId);
     const savedClassroomExists = saved ? data.classrooms.some((classroom) => classroom.id === saved.classroomId) : false;
+    const nextClassroomId = queryClassroomExists ? queryClassroomId : saved && savedClassroomExists ? saved.classroomId : firstClassroomId;
+    const nextSubjectId =
+      (querySubjectId && data.subjects.some((subject) => subject.id === querySubjectId && subject.classroom_id === nextClassroomId) ? querySubjectId : "") ||
+      (saved?.subjectId && data.subjects.some((subject) => subject.id === saved.subjectId && subject.classroom_id === nextClassroomId) ? saved.subjectId : "");
     const nextSession: TeachingSessionDraft = {
-      classroomId: saved && savedClassroomExists ? saved.classroomId : firstClassroomId,
-      subjectId:
-        saved?.subjectId && data.subjects.some((subject) => subject.id === saved.subjectId && subject.classroom_id === (savedClassroomExists ? saved.classroomId : firstClassroomId))
-          ? saved.subjectId
-          : "",
-      activity: saved?.activity || "โจทย์ดาวนักคิด",
-      repeatMode: saved?.repeatMode ?? "unique"
+      classroomId: nextClassroomId,
+      subjectId: nextSubjectId,
+      activity: query.get("activity") || saved?.activity || "โจทย์ดาวนักคิด",
+      repeatMode: repeatModeFromParam(query.get("repeat") || saved?.repeatMode)
     };
+    const appliedSession = queryClassroomExists ? saveTeachingSession(nextSession) : nextSession;
 
-    setActiveSession(nextSession);
-    setClassroomId(nextSession.classroomId);
-    setSubjectId(nextSession.subjectId);
-    setActivity(nextSession.activity);
-    setRepeatMode(nextSession.repeatMode);
+    setActiveSession(appliedSession);
+    setClassroomId(appliedSession.classroomId);
+    setSubjectId(appliedSession.subjectId);
+    setActivity(appliedSession.activity);
+    setRepeatMode(appliedSession.repeatMode);
   }, [data.classrooms, data.subjects, firstClassroomId]);
 
   const pendingSession =
