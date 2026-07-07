@@ -54,6 +54,10 @@ type AddStudentStarEventsInput = {
   stars: number;
 };
 
+type ResetStarEventsInput = {
+  classroom_id?: string | null;
+};
+
 type DataContextValue = {
   data: DataBundle;
   loading: boolean;
@@ -83,6 +87,7 @@ type DataContextValue = {
   addStarEvent: (input: AddStarEventInput) => Promise<void>;
   addStudentStarEvents: (input: AddStudentStarEventsInput) => Promise<number>;
   addGroupMemberStarEvents: (input: AddGroupMemberStarEventsInput) => Promise<number>;
+  resetStarEvents: (input?: ResetStarEventsInput) => Promise<void>;
   logRandom: (input: {
     classroom_id: string;
     subject_id?: string | null;
@@ -1000,6 +1005,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [isDemoMode, isGuestMode, mutateDemo, refresh]
   );
 
+  const resetStarEvents = useCallback(
+    async (input: ResetStarEventsInput = {}) => {
+      const classroomId = input.classroom_id || null;
+
+      if (isDemoMode) {
+        mutateDemo((current) => ({
+          ...current,
+          starEvents: classroomId ? current.starEvents.filter((event) => event.classroom_id !== classroomId) : []
+        }));
+        return;
+      }
+
+      if (isGuestMode) {
+        throw new Error("ต้องเข้าสู่ระบบครูก่อนจึงจะล้างคะแนนดาวได้");
+      }
+
+      const query = getSupabaseBrowserClient().from("star_events").delete();
+      const { error: deleteError } = classroomId ? await query.eq("classroom_id", classroomId) : await query.not("id", "is", null);
+      if (deleteError) throw deleteError;
+      await refresh();
+    },
+    [isDemoMode, isGuestMode, mutateDemo, refresh]
+  );
+
   const resetDemoData = useCallback(() => {
     const demo = cloneSampleData();
     saveDemoData(demo);
@@ -1036,6 +1065,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addStarEvent,
       addStudentStarEvents,
       addGroupMemberStarEvents,
+      resetStarEvents,
       logRandom
     }),
     [
@@ -1062,6 +1092,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       loading,
       logRandom,
       refresh,
+      resetStarEvents,
       resetDemoData,
       setPrimaryStudentPhoto,
       updateClassroom,

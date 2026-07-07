@@ -1,18 +1,19 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { CheckCircle2, KeyRound, Mail, RefreshCcw, ShieldCheck, Star } from "lucide-react";
+import { AlertTriangle, CheckCircle2, KeyRound, Mail, RefreshCcw, ShieldCheck, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label, TextInput } from "@/components/ui/fields";
+import { Label, SelectInput, TextInput } from "@/components/ui/fields";
 import { PageCard } from "@/components/ui/page-card";
 import { STAR_SETTINGS } from "@/lib/star-settings";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useData } from "@/components/providers/data-provider";
 import { readClientParam } from "@/lib/url";
+import { formatStars } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { user, isSupabaseEnabled, changePassword, updatePassword, sendPasswordReset } = useAuth();
-  const { isDemoMode, resetDemoData } = useData();
+  const { data, isDemoMode, resetDemoData, resetStarEvents } = useData();
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
@@ -23,6 +24,19 @@ export default function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [starResetScope, setStarResetScope] = useState("all");
+  const [starResetConfirm, setStarResetConfirm] = useState("");
+  const [starResetBusy, setStarResetBusy] = useState(false);
+  const [starResetMessage, setStarResetMessage] = useState("");
+  const [starResetError, setStarResetError] = useState("");
+
+  const selectedResetClassroomId = starResetScope === "all" ? null : starResetScope;
+  const resetTargetEvents = selectedResetClassroomId
+    ? data.starEvents.filter((event) => event.classroom_id === selectedResetClassroomId)
+    : data.starEvents;
+  const resetTargetStars = resetTargetEvents.reduce((sum, event) => sum + Number(event.stars), 0);
+  const resetTargetClassroom = selectedResetClassroomId ? data.classrooms.find((classroom) => classroom.id === selectedResetClassroomId) : null;
+  const starResetReady = starResetConfirm.trim() === "ล้างดาว" && resetTargetEvents.length > 0 && !starResetBusy;
 
   useEffect(() => {
     setRecoveryMode(readClientParam("mode") === "password-recovery");
@@ -97,6 +111,35 @@ export default function SettingsPage() {
       setResetMessage(caught instanceof Error ? caught.message : "ส่งลิงก์รีเซ็ตไม่สำเร็จ");
     } finally {
       setResetBusy(false);
+    }
+  }
+
+  async function handleStarReset() {
+    setStarResetMessage("");
+    setStarResetError("");
+
+    if (starResetConfirm.trim() !== "ล้างดาว") {
+      setStarResetError("กรุณาพิมพ์คำว่า ล้างดาว เพื่อยืนยัน");
+      return;
+    }
+
+    if (resetTargetEvents.length === 0) {
+      setStarResetError("ไม่มีประวัติดาวในขอบเขตที่เลือก");
+      return;
+    }
+
+    const scopeText = resetTargetClassroom ? `ห้อง ${resetTargetClassroom.name}` : "ทุกห้องเรียน";
+    if (!confirm(`ยืนยันล้างคะแนนดาวของ${scopeText} จำนวน ${resetTargetEvents.length} รายการหรือไม่? รายชื่อนักเรียนและรูปจะไม่ถูกลบ`)) return;
+
+    setStarResetBusy(true);
+    try {
+      await resetStarEvents({ classroom_id: selectedResetClassroomId });
+      setStarResetConfirm("");
+      setStarResetMessage(`ล้างคะแนนดาวของ${scopeText}เรียบร้อยแล้ว`);
+    } catch (caught) {
+      setStarResetError(caught instanceof Error ? caught.message : "ล้างคะแนนดาวไม่สำเร็จ");
+    } finally {
+      setStarResetBusy(false);
     }
   }
 
@@ -204,6 +247,76 @@ export default function SettingsPage() {
               ส่งลิงก์รีเซ็ตรหัสผ่าน
             </Button>
             {resetMessage ? <p className="mt-3 rounded-xl bg-white p-3 text-sm font-bold text-slate-700">{resetMessage}</p> : null}
+          </div>
+        </div>
+      </PageCard>
+
+      <PageCard>
+        <div className="mb-4 flex items-start gap-3">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-rose-100 text-rose-600">
+            <Trash2 className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-violet-950">ล้างคะแนนดาว</h2>
+            <p className="text-sm font-semibold text-slate-500">
+              ล้างเฉพาะประวัติการให้ดาวและคะแนนสะสม รายชื่อนักเรียน ห้องเรียน กลุ่ม วิชา และรูปภาพจะยังอยู่ครบ
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1fr_0.85fr]">
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+            <div className="mb-4 flex items-start gap-3 rounded-2xl bg-white/80 p-3 text-rose-700">
+              <AlertTriangle className="mt-0.5 h-5 w-5" />
+              <p className="text-sm font-bold">
+                การล้างดาวย้อนกลับไม่ได้ในระบบ ควรส่งออก/เก็บรายงานก่อนถ้าต้องใช้เป็นหลักฐานภายหลัง
+              </p>
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <Label>ขอบเขตที่ต้องการล้าง</Label>
+                <SelectInput value={starResetScope} onChange={(event) => setStarResetScope(event.target.value)} disabled={starResetBusy}>
+                  <option value="all">ทุกห้องเรียน</option>
+                  {data.classrooms.map((classroom) => (
+                    <option key={classroom.id} value={classroom.id}>
+                      {classroom.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              </div>
+              <div>
+                <Label>พิมพ์คำยืนยัน</Label>
+                <TextInput
+                  value={starResetConfirm}
+                  onChange={(event) => setStarResetConfirm(event.target.value)}
+                  placeholder="พิมพ์: ล้างดาว"
+                  disabled={starResetBusy}
+                />
+              </div>
+              <Button type="button" variant="danger" onClick={() => void handleStarReset()} disabled={!starResetReady}>
+                <Trash2 className="h-4 w-4" />
+                ล้างคะแนนดาว
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4">
+            <p className="text-sm font-black text-amber-700">จะล้างข้อมูลดาว</p>
+            <p className="mt-2 text-4xl font-black text-violet-950">{resetTargetEvents.length} รายการ</p>
+            <p className="mt-1 text-sm font-bold text-slate-500">
+              รวม {formatStars(resetTargetStars)} ดาว · {resetTargetClassroom ? resetTargetClassroom.name : "ทุกห้องเรียน"}
+            </p>
+            <div className="mt-4 rounded-2xl bg-white/80 p-3 text-sm font-bold text-slate-600">
+              <p>ยังคงอยู่หลังล้าง: รายชื่อนักเรียน, เลขที่, รูปโปรไฟล์, ห้องเรียน, กลุ่ม, รายวิชา</p>
+              <p className="mt-1 text-rose-600">ถูกล้าง: ประวัติการให้ดาวและคะแนนดาวสะสม</p>
+            </div>
+            {starResetError ? <p className="mt-3 rounded-xl bg-white p-3 text-sm font-bold text-rose-600">{starResetError}</p> : null}
+            {starResetMessage ? (
+              <p className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+                {starResetMessage}
+              </p>
+            ) : null}
           </div>
         </div>
       </PageCard>
