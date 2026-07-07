@@ -162,6 +162,7 @@ drop policy if exists "authenticated write star events" on public.star_events;
 drop policy if exists "authenticated delete star events" on public.star_events;
 create policy "authenticated read star events" on public.star_events for select to authenticated using (true);
 create policy "authenticated write star events" on public.star_events for insert to authenticated with check (true);
+create policy "authenticated delete star events" on public.star_events for delete to authenticated using (true);
 
 drop policy if exists "authenticated read random logs" on public.random_logs;
 drop policy if exists "authenticated write random logs" on public.random_logs;
@@ -174,9 +175,9 @@ grant select, insert, update, delete on public.students to authenticated;
 grant select, insert, update, delete on public.student_photos to authenticated;
 grant select, insert, update, delete on public.groups to authenticated;
 grant select, insert, update, delete on public.subjects to authenticated;
-grant select, insert on public.star_events to authenticated;
+grant select, insert, delete on public.star_events to authenticated;
 grant select, insert on public.random_logs to authenticated;
-revoke update, delete on public.star_events from authenticated;
+revoke update on public.star_events from authenticated;
 
 create or replace function public.enforce_student_photo_limit()
 returns trigger

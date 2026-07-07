@@ -1023,7 +1023,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       const query = getSupabaseBrowserClient().from("star_events").delete();
       const { error: deleteError } = classroomId ? await query.eq("classroom_id", classroomId) : await query.not("id", "is", null);
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        const message = deleteError.message.toLowerCase();
+        if (message.includes("permission denied") || message.includes("row-level security") || message.includes("rls")) {
+          throw new Error("Supabase ยังไม่เปิดสิทธิ์ล้างดาว ให้รันไฟล์ supabase/fixes/002_allow_star_event_reset.sql ใน SQL Editor ก่อน");
+        }
+        throw deleteError;
+      }
       await refresh();
     },
     [isDemoMode, isGuestMode, mutateDemo, refresh]
