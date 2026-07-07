@@ -7,14 +7,15 @@ import { GroupIcon } from "@/components/admin/group-icon";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
 import { RollTrail } from "@/components/randomizer/roll-trail";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { useDramaticDraw } from "@/components/randomizer/use-dramatic-draw";
 import { Button } from "@/components/ui/button";
 import { classroomGroups, classroomStudents, sumStudentStars } from "@/lib/calculations";
-import { excludedWhenUnique, isUniqueMode, nextPickedIds, repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
+import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from "@/lib/repeat-mode";
 import { playPointSound } from "@/lib/sound-effects";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Group, Student } from "@/lib/types";
 import { formatStars, pickOne } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 export default function GroupPlayPage() {
@@ -31,14 +32,17 @@ export default function GroupPlayPage() {
   const memberRoll = useDramaticDraw<Student>();
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "กิจกรรมดาวนักคิด");
-    setRepeatMode(repeatModeFromParam(readClientParam("repeat")));
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "กิจกรรมดาวนักคิด" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+    setRepeatMode(session.repeatMode);
+  }, [data.classrooms, data.subjects]);
 
   const groups = useMemo(() => classroomGroups(data.groups, classroomId), [data.groups, classroomId]);
   const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const displayGroup = groupRoll.preview ?? selected;
   const members = displayGroup ? students.filter((student) => student.group_id === displayGroup.id) : [];
   const selectedStars = members.reduce((sum, student) => sum + sumStudentStars(data.starEvents, student.id, subjectId || null), 0);
@@ -113,7 +117,7 @@ export default function GroupPlayPage() {
               เลือกโหมด
             </Button>
           </Link>
-          <p className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold backdrop-blur">{activity}</p>
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} repeatMode={repeatMode} />
           <RepeatModeControl mode={repeatMode} onChange={setRepeatMode} disabled={groupRoll.isRolling || memberRoll.isRolling} />
         </header>
 

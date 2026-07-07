@@ -5,14 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, RefreshCcw, Star, Swords, Trophy } from "lucide-react";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { RANDOM_DRAW_DURATION_MS } from "@/components/randomizer/use-dramatic-draw";
 import { Button } from "@/components/ui/button";
 import { classroomStudents, primaryStudentPhoto, randomStudentPhoto, studentGroup } from "@/lib/calculations";
-import { excludedWhenUnique, isUniqueMode, nextPickedIds, repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
+import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from "@/lib/repeat-mode";
 import { playPointSound, playRandomFinishSound, playRandomStartSound, stopRandomRollingSound } from "@/lib/sound-effects";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Group, Student } from "@/lib/types";
 import { pickOne } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 export default function StudentBattlePage() {
@@ -33,13 +34,16 @@ export default function StudentBattlePage() {
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "โจทย์ดวลตอบไว");
-    setRepeatMode(repeatModeFromParam(readClientParam("repeat")));
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "โจทย์ดวลตอบไว" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+    setRepeatMode(session.repeatMode);
+  }, [data.classrooms, data.subjects]);
 
   const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const displayLeft = rollLeft ?? left;
   const displayRight = rollRight ?? right;
   const displayLeftPhotoUrl = displayLeft
@@ -124,7 +128,7 @@ export default function StudentBattlePage() {
               เลือกโหมด
             </Button>
           </Link>
-          <p className="rounded-full bg-white/15 px-4 py-2 text-sm font-bold backdrop-blur">{activity}</p>
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} repeatMode={repeatMode} />
           <div className="flex flex-wrap gap-2">
             <Button data-sound="off" variant="warning" onClick={drawBattle} disabled={rolling || students.length < 2}>
               <RefreshCcw className="h-4 w-4" />

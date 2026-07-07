@@ -6,8 +6,10 @@ import { BadgePlus, HelpCircle, Swords, Trophy, UserRound, UsersRound, WandSpark
 import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextInput } from "@/components/ui/fields";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { classroomGroups, classroomStudents } from "@/lib/calculations";
 import type { RepeatMode } from "@/lib/repeat-mode";
+import { readTeachingSession, saveTeachingSession, type TeachingSessionDraft } from "@/lib/teaching-session";
 import { buildPlayHref } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
@@ -24,20 +26,72 @@ const modes = [
 
 export default function PlayPage() {
   const { data } = useData();
-  const [classroomId, setClassroomId] = useState(data.classrooms[0]?.id ?? "");
+  const firstClassroomId = data.classrooms[0]?.id ?? "";
+  const [activeSession, setActiveSession] = useState<TeachingSessionDraft>({
+    classroomId: firstClassroomId,
+    subjectId: "",
+    activity: "โจทย์ดาวนักคิด",
+    repeatMode: "unique"
+  });
+  const [classroomId, setClassroomId] = useState(firstClassroomId);
   const [subjectId, setSubjectId] = useState("");
   const [activity, setActivity] = useState("โจทย์ดาวนักคิด");
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
+  const [sessionNotice, setSessionNotice] = useState("");
 
   useEffect(() => {
-    if (!classroomId && data.classrooms[0]?.id) {
-      setClassroomId(data.classrooms[0].id);
+    if (!firstClassroomId) return;
+
+    const saved = readTeachingSession();
+    const savedClassroomExists = saved ? data.classrooms.some((classroom) => classroom.id === saved.classroomId) : false;
+    const nextSession: TeachingSessionDraft = {
+      classroomId: saved && savedClassroomExists ? saved.classroomId : firstClassroomId,
+      subjectId:
+        saved?.subjectId && data.subjects.some((subject) => subject.id === saved.subjectId && subject.classroom_id === (savedClassroomExists ? saved.classroomId : firstClassroomId))
+          ? saved.subjectId
+          : "",
+      activity: saved?.activity || "โจทย์ดาวนักคิด",
+      repeatMode: saved?.repeatMode ?? "unique"
+    };
+
+    setActiveSession(nextSession);
+    setClassroomId(nextSession.classroomId);
+    setSubjectId(nextSession.subjectId);
+    setActivity(nextSession.activity);
+    setRepeatMode(nextSession.repeatMode);
+  }, [data.classrooms, data.subjects, firstClassroomId]);
+
+  const pendingSession =
+    classroomId !== activeSession.classroomId ||
+    subjectId !== activeSession.subjectId ||
+    activity.trim() !== activeSession.activity.trim() ||
+    repeatMode !== activeSession.repeatMode;
+
+  const activeClassroom = data.classrooms.find((classroom) => classroom.id === activeSession.classroomId);
+  const activeSubject = data.subjects.find((subject) => subject.id === activeSession.subjectId) ?? null;
+
+  function applySession() {
+    const nextSession = saveTeachingSession({
+      classroomId,
+      subjectId,
+      activity,
+      repeatMode
+    });
+    setActiveSession(nextSession);
+    setSessionNotice(`ใช้ห้อง ${data.classrooms.find((classroom) => classroom.id === nextSession.classroomId)?.name ?? "ที่เลือก"} แล้ว`);
+    window.setTimeout(() => setSessionNotice(""), 2500);
+  }
+
+  function handleClassroomChange(nextClassroomId: string) {
+    setClassroomId(nextClassroomId);
+    if (!data.subjects.some((subject) => subject.id === subjectId && subject.classroom_id === nextClassroomId)) {
+      setSubjectId("");
     }
-  }, [classroomId, data.classrooms]);
+  }
 
   const subjects = useMemo(() => data.subjects.filter((subject) => subject.classroom_id === classroomId), [data.subjects, classroomId]);
-  const studentCount = classroomStudents(data.students, classroomId).length;
-  const groupCount = classroomGroups(data.groups, classroomId).length;
+  const studentCount = classroomStudents(data.students, activeSession.classroomId).length;
+  const groupCount = classroomGroups(data.groups, activeSession.classroomId).length;
 
   return (
     <main className="space-bg min-h-screen p-4 pt-20 text-white sm:p-6 sm:pt-6">
@@ -49,6 +103,9 @@ export default function PlayPage() {
             </p>
             <h1 className="display-title mt-3 text-4xl font-black sm:text-6xl">สุ่มสนุก ดาวนักคิด</h1>
             <p className="mt-2 max-w-2xl text-base font-bold text-violet-50/80">แผงภารกิจสำหรับเปิดบนโปรเจกเตอร์ในห้องเรียน ปุ่มใหญ่ อ่านง่าย และพร้อมลุ้นทุกกิจกรรม</p>
+            <div className="mt-4">
+              <TeachingSessionBadge classroom={activeClassroom} subject={activeSubject} activity={activeSession.activity} repeatMode={activeSession.repeatMode} />
+            </div>
           </div>
           <Link href="/dashboard">
             <Button variant="light">กลับศูนย์ควบคุม</Button>
@@ -58,18 +115,23 @@ export default function PlayPage() {
         <section className="mb-5 rounded-[2rem] border border-white/15 bg-white/95 p-4 text-violet-950 shadow-2xl shadow-violet-950/30 backdrop-blur md:p-5">
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-black text-violet-700">ตั้งค่าภารกิจ</p>
-              <h2 className="text-2xl font-black">เลือกห้อง วิชา และรูปแบบการสุ่ม</h2>
+              <p className="text-sm font-black text-violet-700">ตั้งค่าคาบนี้</p>
+              <h2 className="text-2xl font-black">เลือกห้อง วิชา และกดใช้ห้องนี้ก่อนเริ่ม</h2>
             </div>
             <div className="flex flex-wrap gap-2 text-xs font-black">
               <span className="rounded-full bg-sky-50 px-3 py-1.5 text-sky-700 ring-1 ring-sky-100">นักเรียน {studentCount} คน</span>
               <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 ring-1 ring-amber-100">ทีม {groupCount} กลุ่ม</span>
+              {pendingSession ? (
+                <span className="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700 ring-1 ring-rose-100">ยังไม่ได้ใช้ค่าที่เลือก</span>
+              ) : (
+                <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 ring-1 ring-emerald-100">พร้อมใช้ห้องนี้</span>
+              )}
             </div>
           </div>
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.25fr_1.15fr]">
+          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.25fr_1.05fr_auto]">
             <div>
               <Label>ห้องเรียน</Label>
-              <SelectInput value={classroomId} onChange={(event) => { setClassroomId(event.target.value); setSubjectId(""); }}>
+              <SelectInput value={classroomId} onChange={(event) => handleClassroomChange(event.target.value)}>
                 {data.classrooms.map((classroom) => (
                   <option key={classroom.id} value={classroom.id}>
                     {classroom.name}
@@ -100,14 +162,30 @@ export default function PlayPage() {
                 className="w-full bg-violet-950"
               />
             </div>
+            <div className="flex items-end">
+              <Button className="min-h-12 w-full whitespace-nowrap" variant={pendingSession ? "warning" : "success"} onClick={applySession} disabled={!classroomId}>
+                ใช้ห้องนี้
+              </Button>
+            </div>
           </div>
+          {sessionNotice ? <p className="mt-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">{sessionNotice}</p> : null}
+          {pendingSession ? (
+            <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-black text-amber-700">
+              เลือกค่าใหม่แล้ว ให้กด “ใช้ห้องนี้” ก่อนเริ่มภารกิจ เพื่อป้องกันเข้าผิดห้อง
+            </p>
+          ) : null}
         </section>
 
         <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {modes.map((mode) => (
             <MissionCard
               key={mode.href}
-              href={buildPlayHref(mode.href, { classroom: classroomId, subject: subjectId, activity, repeat: repeatMode })}
+              href={buildPlayHref(mode.href, {
+                classroom: activeSession.classroomId,
+                subject: activeSession.subjectId,
+                activity: activeSession.activity,
+                repeat: activeSession.repeatMode
+              })}
               mode={mode}
             />
           ))}

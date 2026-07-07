@@ -6,14 +6,15 @@ import { ArrowLeft, HeartHandshake, RefreshCcw, Star } from "lucide-react";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
 import { RollTrail } from "@/components/randomizer/roll-trail";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { useDramaticDraw } from "@/components/randomizer/use-dramatic-draw";
 import { Button } from "@/components/ui/button";
 import { classroomStudents, primaryStudentPhoto, randomStudentPhoto } from "@/lib/calculations";
-import { excludedWhenUnique, isUniqueMode, nextPickedIds, repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
+import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from "@/lib/repeat-mode";
 import { playPointSound } from "@/lib/sound-effects";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Student } from "@/lib/types";
 import { pickOne } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 export default function HelperPage() {
@@ -32,13 +33,16 @@ export default function HelperPage() {
   const helperRoll = useDramaticDraw<Student>();
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "ภารกิจช่วยเพื่อน");
-    setRepeatMode(repeatModeFromParam(readClientParam("repeat")));
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "ภารกิจช่วยเพื่อน" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+    setRepeatMode(session.repeatMode);
+  }, [data.classrooms, data.subjects]);
 
   const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const displayMain = mainRoll.preview ?? mainStudent;
   const displayHelper = helperRoll.preview ?? helper;
   const displayMainPhotoUrl = displayMain
@@ -139,6 +143,10 @@ export default function HelperPage() {
             <RepeatModeControl mode={repeatMode} onChange={setRepeatMode} disabled={mainRoll.isRolling || helperRoll.isRolling} />
           </div>
         </header>
+
+        <div className="mb-5 flex justify-center">
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} repeatMode={repeatMode} />
+        </div>
 
         <h1 className="display-title mb-6 text-center text-4xl font-black sm:text-6xl">ภารกิจช่วยเพื่อน</h1>
         <section className="grid gap-5 lg:grid-cols-2">

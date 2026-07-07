@@ -5,15 +5,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, RefreshCcw, Star } from "lucide-react";
 import { GroupIcon } from "@/components/admin/group-icon";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { RANDOM_DRAW_DURATION_MS } from "@/components/randomizer/use-dramatic-draw";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { Button } from "@/components/ui/button";
 import { classroomGroups, classroomStudents, primaryStudentPhoto, randomStudentPhoto } from "@/lib/calculations";
-import { excludedWhenUnique, isUniqueMode, nextPickedIds, repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
+import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from "@/lib/repeat-mode";
 import { playPointSound, playRandomFinishSound, playRandomStartSound, stopRandomRollingSound } from "@/lib/sound-effects";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Student } from "@/lib/types";
 import { pickOne, formatStars } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 export default function GroupRepresentativePage() {
@@ -31,14 +32,17 @@ export default function GroupRepresentativePage() {
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "กิจกรรมดาวนักคิด");
-    setRepeatMode(repeatModeFromParam(readClientParam("repeat")));
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "กิจกรรมดาวนักคิด" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+    setRepeatMode(session.repeatMode);
+  }, [data.classrooms, data.subjects]);
 
   const groups = useMemo(() => classroomGroups(data.groups, classroomId), [data.groups, classroomId]);
   const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const avoidRepeat = isUniqueMode(repeatMode);
 
   useEffect(() => {
@@ -140,6 +144,10 @@ export default function GroupRepresentativePage() {
           </Button>
           <RepeatModeControl mode={repeatMode} onChange={setRepeatMode} disabled={rolling} />
         </header>
+
+        <div className="mb-5 flex justify-center">
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} repeatMode={repeatMode} />
+        </div>
 
         <h1 className="display-title mb-5 text-center text-4xl font-black sm:text-6xl">ตัวแทนทีมละ 1 คน</h1>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

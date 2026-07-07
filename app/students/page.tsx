@@ -9,6 +9,7 @@ import { Label, SelectInput, TextArea, TextInput } from "@/components/ui/fields"
 import { PageCard } from "@/components/ui/page-card";
 import { classroomAllStudents, primaryStudentPhoto, studentGroup, studentPhotoGallery, sumStudentStars } from "@/lib/calculations";
 import { downloadStudentExcelTemplate, parseStudentExcelFile } from "@/lib/student-excel";
+import { readTeachingSession, saveTeachingSession } from "@/lib/teaching-session";
 import type { StudentImportResult } from "@/lib/student-import";
 import type { Student, StudentDraft, StudentPhoto } from "@/lib/types";
 import { formatStars } from "@/lib/utils";
@@ -48,7 +49,7 @@ export default function StudentsPage() {
     importStudentRows
   } = useData();
   const firstClassroomId = data.classrooms[0]?.id ?? "";
-  const [classroomId, setClassroomId] = useState(firstClassroomId);
+  const [classroomId, setClassroomId] = useState("");
   const [draft, setDraft] = useState<StudentDraft>(createDraft(firstClassroomId));
   const [editing, setEditing] = useState<Student | null>(null);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -67,7 +68,12 @@ export default function StudentsPage() {
 
   useEffect(() => {
     const queryClassroom = selectedClassroomFromUrl();
-    const next = queryClassroom && data.classrooms.some((classroom) => classroom.id === queryClassroom) ? queryClassroom : firstClassroomId;
+    const saved = readTeachingSession();
+    const savedClassroomId = saved?.classroomId ?? "";
+    const next =
+      (queryClassroom && data.classrooms.some((classroom) => classroom.id === queryClassroom) ? queryClassroom : "") ||
+      (savedClassroomId && data.classrooms.some((classroom) => classroom.id === savedClassroomId) ? savedClassroomId : "") ||
+      firstClassroomId;
     if (next && !classroomId) {
       setClassroomId(next);
       setDraft(createDraft(next));
@@ -115,6 +121,13 @@ export default function StudentsPage() {
     setPhotoFiles([]);
     setFileInputKey((current) => current + 1);
     setFormNotice("");
+    const saved = readTeachingSession();
+    saveTeachingSession({
+      classroomId: next,
+      subjectId: "",
+      activity: saved?.activity || "โจทย์ดาวนักคิด",
+      repeatMode: saved?.repeatMode ?? "unique"
+    });
   }
 
   function startEdit(student: Student) {

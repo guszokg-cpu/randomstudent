@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextInput } from "@/components/ui/fields";
 import { PageCard } from "@/components/ui/page-card";
 import { classroomGroups, classroomStudents, sumStudentStars } from "@/lib/calculations";
+import { readTeachingSession, saveTeachingSession } from "@/lib/teaching-session";
 import type { Group, GroupDraft } from "@/lib/types";
 import { formatStars } from "@/lib/utils";
 import { useData } from "@/components/providers/data-provider";
@@ -30,7 +31,7 @@ function createDraft(classroomId: string): GroupDraft {
 export default function GroupsPage() {
   const { data, addGroup, updateGroup, deleteGroup, assignStudentToGroup } = useData();
   const firstClassroomId = data.classrooms[0]?.id ?? "";
-  const [classroomId, setClassroomId] = useState(firstClassroomId);
+  const [classroomId, setClassroomId] = useState("");
   const [draft, setDraft] = useState<GroupDraft>(createDraft(firstClassroomId));
   const [editing, setEditing] = useState<Group | null>(null);
   const [iconFile, setIconFile] = useState<File | null>(null);
@@ -45,7 +46,12 @@ export default function GroupsPage() {
 
   useEffect(() => {
     const queryClassroom = selectedClassroomFromUrl();
-    const next = queryClassroom && data.classrooms.some((classroom) => classroom.id === queryClassroom) ? queryClassroom : firstClassroomId;
+    const saved = readTeachingSession();
+    const savedClassroomId = saved?.classroomId ?? "";
+    const next =
+      (queryClassroom && data.classrooms.some((classroom) => classroom.id === queryClassroom) ? queryClassroom : "") ||
+      (savedClassroomId && data.classrooms.some((classroom) => classroom.id === savedClassroomId) ? savedClassroomId : "") ||
+      firstClassroomId;
     if (next && !classroomId) {
       setClassroomId(next);
       setDraft(createDraft(next));
@@ -62,6 +68,13 @@ export default function GroupsPage() {
     setDraft(createDraft(next));
     setEditing(null);
     setSelectedGroupId("");
+    const saved = readTeachingSession();
+    saveTeachingSession({
+      classroomId: next,
+      subjectId: "",
+      activity: saved?.activity || "โจทย์ดาวนักคิด",
+      repeatMode: saved?.repeatMode ?? "unique"
+    });
   }
 
   function startEdit(group: Group) {

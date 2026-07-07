@@ -6,14 +6,15 @@ import { ArrowLeft, Crown, RefreshCcw, Star } from "lucide-react";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
 import { RollTrail } from "@/components/randomizer/roll-trail";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { useDramaticDraw } from "@/components/randomizer/use-dramatic-draw";
 import { Button } from "@/components/ui/button";
 import { classroomStudents, primaryStudentPhoto, randomStudentPhoto } from "@/lib/calculations";
-import { excludedWhenUnique, isUniqueMode, nextPickedIds, repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
+import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from "@/lib/repeat-mode";
 import { playPointSound } from "@/lib/sound-effects";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Student } from "@/lib/types";
 import { pickOne } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 export default function BossPage() {
@@ -28,13 +29,16 @@ export default function BossPage() {
   const studentRoll = useDramaticDraw<Student>();
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "ภารกิจบอส");
-    setRepeatMode(repeatModeFromParam(readClientParam("repeat")));
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "ภารกิจบอส" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+    setRepeatMode(session.repeatMode);
+  }, [data.classrooms, data.subjects]);
 
   const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const displayStudent = studentRoll.preview ?? selected;
   const displayPhotoUrl = displayStudent
     ? studentRoll.preview
@@ -93,6 +97,10 @@ export default function BossPage() {
           </Button>
           <RepeatModeControl mode={repeatMode} onChange={setRepeatMode} disabled={studentRoll.isRolling} />
         </header>
+
+        <div className="mb-5 flex justify-center">
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} repeatMode={repeatMode} />
+        </div>
 
         <section className="rounded-[2rem] bg-white/12 p-6 text-center shadow-2xl backdrop-blur">
           <Crown className="mx-auto mb-3 h-16 w-16 fill-amber-300 text-amber-300" />

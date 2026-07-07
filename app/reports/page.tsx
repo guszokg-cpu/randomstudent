@@ -8,6 +8,7 @@ import { Label, SelectInput, TextArea, TextInput } from "@/components/ui/fields"
 import { PageCard } from "@/components/ui/page-card";
 import { classroomGroups, classroomStudents, randomCountForStudent, topGroups, topStudents } from "@/lib/calculations";
 import { playPointSound } from "@/lib/sound-effects";
+import { readTeachingSession, saveTeachingSession } from "@/lib/teaching-session";
 import type { DataBundle, StarEvent } from "@/lib/types";
 import { formatStars } from "@/lib/utils";
 import { useData } from "@/components/providers/data-provider";
@@ -32,7 +33,7 @@ type TimeRangeId = (typeof timeRanges)[number]["id"];
 
 export default function ReportsPage() {
   const { data, addStarEvent } = useData();
-  const [classroomId, setClassroomId] = useState(data.classrooms[0]?.id ?? "");
+  const [classroomId, setClassroomId] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [activityFilter, setActivityFilter] = useState("");
   const [timeRange, setTimeRange] = useState<TimeRangeId>("all");
@@ -48,8 +49,15 @@ export default function ReportsPage() {
   const [correctionMessage, setCorrectionMessage] = useState("");
 
   useEffect(() => {
-    if (!classroomId && data.classrooms[0]?.id) {
-      setClassroomId(data.classrooms[0].id);
+    const saved = readTeachingSession();
+    const savedClassroomId = saved?.classroomId ?? "";
+    const nextClassroomId =
+      (savedClassroomId && data.classrooms.some((classroom) => classroom.id === savedClassroomId) ? savedClassroomId : "") ||
+      data.classrooms[0]?.id ||
+      "";
+
+    if (!classroomId && nextClassroomId) {
+      setClassroomId(nextClassroomId);
     }
   }, [classroomId, data.classrooms]);
 
@@ -137,6 +145,13 @@ export default function ReportsPage() {
     setClassroomId(nextClassroomId);
     setSubjectId("");
     setActivityFilter("");
+    const saved = readTeachingSession();
+    saveTeachingSession({
+      classroomId: nextClassroomId,
+      subjectId: "",
+      activity: saved?.activity || "โจทย์ดาวนักคิด",
+      repeatMode: saved?.repeatMode ?? "unique"
+    });
   }
 
   function handleSubjectChange(nextSubjectId: string) {

@@ -7,14 +7,15 @@ import { GroupIcon } from "@/components/admin/group-icon";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
 import { RollTrail } from "@/components/randomizer/roll-trail";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { RANDOM_DRAW_DURATION_MS, useDramaticDraw } from "@/components/randomizer/use-dramatic-draw";
 import { Button } from "@/components/ui/button";
 import { classroomGroups, classroomStudents, primaryStudentPhoto, randomStudentPhoto } from "@/lib/calculations";
-import { excludedWhenUnique, isUniqueMode, nextPickedIds, repeatModeFromParam, type RepeatMode } from "@/lib/repeat-mode";
+import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from "@/lib/repeat-mode";
 import { playPointSound, playRandomFinishSound, playRandomStartSound, stopRandomRollingSound } from "@/lib/sound-effects";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Group, Student } from "@/lib/types";
 import { pickOne } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 export default function BattlePage() {
@@ -40,14 +41,17 @@ export default function BattlePage() {
   const rightRepRoll = useDramaticDraw<Student>();
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "กิจกรรมดาวนักคิด");
-    setRepeatMode(repeatModeFromParam(readClientParam("repeat")));
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "กิจกรรมดาวนักคิด" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+    setRepeatMode(session.repeatMode);
+  }, [data.classrooms, data.subjects]);
 
   const groups = useMemo(() => classroomGroups(data.groups, classroomId), [data.groups, classroomId]);
   const students = useMemo(() => classroomStudents(data.students, classroomId), [data.students, classroomId]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const displayLeft = rollLeft ?? left;
   const displayRight = rollRight ?? right;
   const leftMemberCount = left ? students.filter((student) => student.group_id === left.id).length : 0;
@@ -172,6 +176,10 @@ export default function BattlePage() {
           </Button>
           <RepeatModeControl mode={repeatMode} onChange={setRepeatMode} disabled={pairRolling || leftRepRoll.isRolling || rightRepRoll.isRolling} />
         </header>
+
+        <div className="mb-5 flex justify-center">
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} repeatMode={repeatMode} />
+        </div>
 
         <h1 className="display-title mb-6 text-center text-4xl font-black sm:text-6xl">ดวลตอบไวแบบทีม</h1>
         <section className="grid items-stretch gap-4 lg:grid-cols-[1fr_auto_1fr]">

@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Edit3, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/admin/empty-state";
 import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextArea, TextInput } from "@/components/ui/fields";
 import { PageCard } from "@/components/ui/page-card";
+import { readTeachingSession, saveTeachingSession } from "@/lib/teaching-session";
 import type { Subject, SubjectDraft } from "@/lib/types";
 import { useData } from "@/components/providers/data-provider";
 
@@ -21,15 +22,35 @@ function createDraft(classroomId: string): SubjectDraft {
 export default function SubjectsPage() {
   const { data, addSubject, updateSubject, deleteSubject } = useData();
   const firstClassroomId = data.classrooms[0]?.id ?? "";
-  const [classroomId, setClassroomId] = useState(firstClassroomId);
+  const [classroomId, setClassroomId] = useState("");
   const [draft, setDraft] = useState<SubjectDraft>(createDraft(firstClassroomId));
   const [editing, setEditing] = useState<Subject | null>(null);
   const subjects = useMemo(() => data.subjects.filter((subject) => subject.classroom_id === classroomId), [data.subjects, classroomId]);
+
+  useEffect(() => {
+    const saved = readTeachingSession();
+    const savedClassroomId = saved?.classroomId ?? "";
+    const next =
+      (savedClassroomId && data.classrooms.some((classroom) => classroom.id === savedClassroomId) ? savedClassroomId : "") ||
+      firstClassroomId;
+
+    if (next && !classroomId) {
+      setClassroomId(next);
+      setDraft(createDraft(next));
+    }
+  }, [classroomId, data.classrooms, firstClassroomId]);
 
   function changeClassroom(next: string) {
     setClassroomId(next);
     setDraft(createDraft(next));
     setEditing(null);
+    const saved = readTeachingSession();
+    saveTeachingSession({
+      classroomId: next,
+      subjectId: "",
+      activity: saved?.activity || "โจทย์ดาวนักคิด",
+      repeatMode: saved?.repeatMode ?? "unique"
+    });
   }
 
   function startEdit(subject: Subject) {

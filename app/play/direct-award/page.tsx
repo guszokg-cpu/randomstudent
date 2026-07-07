@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Search, Star, UsersRound, Zap } from "lucide-react";
 import { StudentAvatar } from "@/components/admin/student-avatar";
+import { TeachingSessionBadge } from "@/components/randomizer/teaching-session-badge";
 import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextArea, TextInput } from "@/components/ui/fields";
 import { classroomGroups, classroomStudents, sumStudentStars } from "@/lib/calculations";
 import { playPointSound } from "@/lib/sound-effects";
 import { STAR_SETTINGS } from "@/lib/star-settings";
+import { resolvePlaySession } from "@/lib/teaching-session";
 import { cn, formatStars } from "@/lib/utils";
-import { readClientParam } from "@/lib/url";
 import { useData } from "@/components/providers/data-provider";
 
 type TargetMode = "student" | "group";
@@ -30,14 +31,17 @@ export default function DirectAwardPage() {
   const [toast, setToast] = useState("");
 
   useEffect(() => {
-    setClassroomId(readClientParam("classroom") || data.classrooms[0]?.id || "");
-    setSubjectId(readClientParam("subject"));
-    setActivity(readClientParam("activity") || "ตอบคำถามในห้อง");
-  }, [data.classrooms]);
+    const session = resolvePlaySession({ classrooms: data.classrooms, subjects: data.subjects, defaultActivity: "ตอบคำถามในห้อง" });
+    setClassroomId(session.classroomId);
+    setSubjectId(session.subjectId);
+    setActivity(session.activity);
+  }, [data.classrooms, data.subjects]);
 
   const subjects = useMemo(() => data.subjects.filter((subject) => subject.classroom_id === classroomId), [classroomId, data.subjects]);
   const students = useMemo(() => classroomStudents(data.students, classroomId), [classroomId, data.students]);
   const groups = useMemo(() => classroomGroups(data.groups, classroomId), [classroomId, data.groups]);
+  const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
+  const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const selectedStudents = students.filter((student) => selectedStudentIds.includes(student.id));
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? null;
   const selectedGroupMembers = selectedGroup ? students.filter((student) => student.group_id === selectedGroup.id) : [];
@@ -154,6 +158,7 @@ export default function DirectAwardPage() {
               เลือกโหมด
             </Button>
           </Link>
+          <TeachingSessionBadge classroom={classroom} subject={subject} activity={activity} />
           <Link href="/dashboard">
             <Button variant="ghost" className="bg-white/10 text-white hover:bg-white/15">
               กลับหน้าครู
