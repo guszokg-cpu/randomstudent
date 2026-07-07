@@ -18,6 +18,7 @@ export type Classroom = {
   grade_level: string;
   academic_year: string;
   image_url: string | null;
+  sort_order: number;
   status: Status;
   created_at: string;
 };

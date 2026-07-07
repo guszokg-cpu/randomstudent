@@ -6,12 +6,16 @@ create table if not exists public.classrooms (
   grade_level text not null,
   academic_year text not null,
   image_url text,
+  sort_order integer not null default 0,
   status text not null default 'active' check (status in ('active', 'inactive')),
   created_at timestamptz not null default now()
 );
 
 alter table public.classrooms
   add column if not exists image_url text;
+
+alter table public.classrooms
+  add column if not exists sort_order integer not null default 0;
 
 create table if not exists public.groups (
   id uuid primary key default gen_random_uuid(),

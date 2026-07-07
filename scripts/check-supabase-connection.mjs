@@ -75,6 +75,10 @@ const { error: classroomImageColumnError } = await supabase.from("classrooms").s
 printResult(!classroomImageColumnError, "Column classrooms.image_url", classroomImageColumnError?.message ?? "reachable");
 failed = failed || Boolean(classroomImageColumnError);
 
+const { error: classroomSortColumnError } = await supabase.from("classrooms").select("id,sort_order").limit(1);
+printResult(!classroomSortColumnError, "Column classrooms.sort_order", classroomSortColumnError?.message ?? "reachable");
+failed = failed || Boolean(classroomSortColumnError);
+
 const { error: rpcError } = await supabase.rpc("get_student_score_by_code", { lookup_code: "__codex_check__" });
 printResult(!rpcError, "RPC get_student_score_by_code", rpcError?.message ?? "reachable");
 failed = failed || Boolean(rpcError);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { Edit3, ImagePlus, Rocket, Trash2, Upload, Users, UsersRound, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Edit3, ImagePlus, Rocket, Trash2, Upload, Users, UsersRound, X } from "lucide-react";
 import { EmptyState } from "@/components/admin/empty-state";
 import { Button } from "@/components/ui/button";
 import { Label, SelectInput, TextInput } from "@/components/ui/fields";
@@ -15,16 +15,19 @@ const initialDraft: ClassroomDraft = {
   grade_level: "ป.4",
   academic_year: "2569",
   image_url: null,
+  sort_order: 0,
   status: "active"
 };
 
 export default function ClassroomsPage() {
-  const { data, addClassroom, updateClassroom, deleteClassroom } = useData();
+  const { data, addClassroom, updateClassroom, reorderClassrooms, deleteClassroom } = useData();
   const [draft, setDraft] = useState<ClassroomDraft>(initialDraft);
   const [editing, setEditing] = useState<Classroom | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
+  const [orderError, setOrderError] = useState("");
+  const [reorderBusyId, setReorderBusyId] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -66,6 +69,7 @@ export default function ClassroomsPage() {
       grade_level: classroom.grade_level,
       academic_year: classroom.academic_year,
       image_url: classroom.image_url,
+      sort_order: classroom.sort_order,
       status: classroom.status
     });
     setImageFile(null);
@@ -97,6 +101,25 @@ export default function ClassroomsPage() {
   }
 
   const previewUrl = imagePreviewUrl ?? draft.image_url ?? null;
+
+  async function moveClassroom(classroomId: string, direction: "up" | "down") {
+    const currentIndex = data.classrooms.findIndex((classroom) => classroom.id === classroomId);
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= data.classrooms.length) return;
+
+    const nextIds = data.classrooms.map((classroom) => classroom.id);
+    [nextIds[currentIndex], nextIds[targetIndex]] = [nextIds[targetIndex], nextIds[currentIndex]];
+
+    setOrderError("");
+    setReorderBusyId(classroomId);
+    try {
+      await reorderClassrooms(nextIds);
+    } catch (caught) {
+      setOrderError(caught instanceof Error ? caught.message : "จัดลำดับห้องเรียนไม่สำเร็จ");
+    } finally {
+      setReorderBusyId("");
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -151,6 +174,16 @@ export default function ClassroomsPage() {
       </PageCard>
 
       <PageCard>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-violet-950">ลำดับห้องเรียน</h2>
+            <p className="text-sm font-semibold text-slate-500">กดลูกศรเพื่อจัดว่าห้องไหนแสดงบน Dashboard ก่อน</p>
+          </div>
+          <span className="rounded-full bg-violet-50 px-4 py-2 text-sm font-black text-violet-700 ring-1 ring-violet-100">
+            ห้องบนสุดจะแสดงก่อน
+          </span>
+        </div>
+        {orderError ? <p className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600">{orderError}</p> : null}
         {data.classrooms.length === 0 ? (
           <EmptyState title="ยังไม่มีห้องเรียน" />
         ) : (
@@ -169,12 +202,38 @@ export default function ClassroomsPage() {
               <tbody>
                 {data.classrooms.map((classroom) => {
                   const studentCount = data.students.filter((student) => student.classroom_id === classroom.id).length;
+                  const classroomIndex = data.classrooms.findIndex((item) => item.id === classroom.id);
                   return (
                     <tr key={classroom.id} className="rounded-2xl bg-white shadow-sm">
                       <td className="rounded-l-2xl px-3 py-4">
                         <div className="flex items-center gap-3">
+                          <div className="grid gap-1">
+                            <Button
+                              type="button"
+                              variant="light"
+                              className="h-8 w-8 px-0"
+                              title={`เลื่อน ${classroom.name} ขึ้น`}
+                              disabled={classroomIndex === 0 || reorderBusyId === classroom.id}
+                              onClick={() => void moveClassroom(classroom.id, "up")}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="light"
+                              className="h-8 w-8 px-0"
+                              title={`เลื่อน ${classroom.name} ลง`}
+                              disabled={classroomIndex === data.classrooms.length - 1 || reorderBusyId === classroom.id}
+                              onClick={() => void moveClassroom(classroom.id, "down")}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                          </div>
                           <ClassroomThumb classroom={classroom} />
-                          <span className="text-lg font-black text-violet-950">{classroom.name}</span>
+                          <div>
+                            <span className="text-lg font-black text-violet-950">{classroom.name}</span>
+                            <p className="text-xs font-bold text-slate-400">ลำดับที่ {classroomIndex + 1}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="px-3 py-4 font-semibold">{classroom.grade_level}</td>

@@ -10,6 +10,7 @@ export const sampleData: DataBundle = {
       grade_level: "ป.4",
       academic_year: "2569",
       image_url: null,
+      sort_order: 10,
       status: "active",
       created_at: createdAt
     },
@@ -19,6 +20,7 @@ export const sampleData: DataBundle = {
       grade_level: "ป.5",
       academic_year: "2569",
       image_url: null,
+      sort_order: 20,
       status: "active",
       created_at: createdAt
     },
@@ -28,6 +30,7 @@ export const sampleData: DataBundle = {
       grade_level: "ป.6",
       academic_year: "2569",
       image_url: null,
+      sort_order: 30,
       status: "active",
       created_at: createdAt
     }

@@ -68,6 +68,7 @@ type DataContextValue = {
   resetDemoData: () => void;
   addClassroom: (draft: ClassroomDraft, imageFile?: File | null) => Promise<void>;
   updateClassroom: (id: string, draft: Partial<ClassroomDraft>, imageFile?: File | null) => Promise<void>;
+  reorderClassrooms: (orderedIds: string[]) => Promise<void>;
   deleteClassroom: (id: string) => Promise<void>;
   addStudent: (draft: StudentDraft, photoFile?: File | null) => Promise<string>;
   updateStudent: (id: string, draft: Partial<StudentDraft>, photoFile?: File | null) => Promise<void>;
@@ -144,12 +145,17 @@ function normalizeDataBundle(bundle: DataBundle) {
     }
   });
 
+  const normalizedClassrooms = bundle.classrooms
+    .map((classroom, index) => ({
+      ...classroom,
+      image_url: classroom.image_url ?? null,
+      sort_order: Number.isFinite(Number(classroom.sort_order)) ? Number(classroom.sort_order) : index * 10
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
   return {
     ...bundle,
-    classrooms: bundle.classrooms.map((classroom) => ({
-      ...classroom,
-      image_url: classroom.image_url ?? null
-    })),
+    classrooms: normalizedClassrooms,
     students: bundle.students.map((student) => ({
       ...student,
       photo_url: primaryByStudent.get(student.id) ?? student.photo_url ?? null,
@@ -332,7 +338,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     async (draft: ClassroomDraft, imageFile?: File | null) => {
       const id = uid();
       const imageUrl = (await uploadAsset("classroom-images", id, imageFile)) ?? draft.image_url ?? null;
-      const row: Classroom = { ...draft, id, image_url: imageUrl, created_at: nowIso() };
+      const nextSortOrder = Math.max(0, ...data.classrooms.map((classroom) => classroom.sort_order ?? 0)) + 10;
+      const row: Classroom = { ...draft, id, image_url: imageUrl, sort_order: nextSortOrder, created_at: nowIso() };
       if (isDemoMode) {
         mutateDemo((current) => ({ ...current, classrooms: [row, ...current.classrooms] }));
         return;
@@ -341,7 +348,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (insertError) throw insertError;
       await refresh();
     },
-    [isDemoMode, mutateDemo, refresh, uploadAsset]
+    [data.classrooms, isDemoMode, mutateDemo, refresh, uploadAsset]
   );
 
   const updateClassroom = useCallback(
@@ -361,6 +368,37 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       await refresh();
     },
     [isDemoMode, mutateDemo, refresh, uploadAsset]
+  );
+
+  const reorderClassrooms = useCallback(
+    async (orderedIds: string[]) => {
+      const patches = orderedIds.map((id, index) => ({ id, sort_order: (index + 1) * 10 }));
+
+      if (isDemoMode) {
+        mutateDemo((current) => ({
+          ...current,
+          classrooms: current.classrooms.map((classroom) => {
+            const patch = patches.find((item) => item.id === classroom.id);
+            return patch ? { ...classroom, sort_order: patch.sort_order } : classroom;
+          })
+        }));
+        return;
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      const results = await Promise.all(
+        patches.map((patch) => supabase.from("classrooms").update({ sort_order: patch.sort_order }).eq("id", patch.id))
+      );
+      const failed = results.find((result) => result.error);
+      if (failed?.error) {
+        if (failed.error.message.includes("sort_order")) {
+          throw new Error("Supabase ยังไม่มีช่อง sort_order ให้รันไฟล์ supabase/fixes/005_classroom_sort_order.sql ใน SQL Editor ก่อน");
+        }
+        throw failed.error;
+      }
+      await refresh();
+    },
+    [isDemoMode, mutateDemo, refresh]
   );
 
   const deleteClassroom = useCallback(
@@ -1074,6 +1112,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       resetDemoData,
       addClassroom,
       updateClassroom,
+      reorderClassrooms,
       deleteClassroom,
       addStudent,
       updateStudent,
@@ -1120,6 +1159,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       loading,
       logRandom,
       refresh,
+      reorderClassrooms,
       resetStarEvents,
       resetDemoData,
       setPrimaryStudentPhoto,
