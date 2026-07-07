@@ -66,8 +66,8 @@ type DataContextValue = {
   isGuestMode: boolean;
   refresh: () => Promise<void>;
   resetDemoData: () => void;
-  addClassroom: (draft: ClassroomDraft) => Promise<void>;
-  updateClassroom: (id: string, draft: Partial<ClassroomDraft>) => Promise<void>;
+  addClassroom: (draft: ClassroomDraft, imageFile?: File | null) => Promise<void>;
+  updateClassroom: (id: string, draft: Partial<ClassroomDraft>, imageFile?: File | null) => Promise<void>;
   deleteClassroom: (id: string) => Promise<void>;
   addStudent: (draft: StudentDraft, photoFile?: File | null) => Promise<string>;
   updateStudent: (id: string, draft: Partial<StudentDraft>, photoFile?: File | null) => Promise<void>;
@@ -100,6 +100,8 @@ type DataContextValue = {
 const DataContext = createContext<DataContextValue | null>(null);
 const storageKey = "suum-sanuk-dao-nakkhit-demo-v1";
 const maxStudentPhotos = 5;
+const maxUploadBytes = 5 * 1024 * 1024;
+const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const emptyDataBundle: DataBundle = {
   classrooms: [],
   students: [],
@@ -144,6 +146,10 @@ function normalizeDataBundle(bundle: DataBundle) {
 
   return {
     ...bundle,
+    classrooms: bundle.classrooms.map((classroom) => ({
+      ...classroom,
+      image_url: classroom.image_url ?? null
+    })),
     students: bundle.students.map((student) => ({
       ...student,
       photo_url: primaryByStudent.get(student.id) ?? student.photo_url ?? null,
@@ -151,6 +157,16 @@ function normalizeDataBundle(bundle: DataBundle) {
     })),
     studentPhotos: normalizedPhotos
   };
+}
+
+function validateImageFile(file: File) {
+  if (!supportedImageTypes.has(file.type)) {
+    throw new Error("รองรับเฉพาะไฟล์รูป .jpg, .jpeg, .png, .webp หรือ .gif");
+  }
+
+  if (file.size > maxUploadBytes) {
+    throw new Error("ขนาดไฟล์รูปต้องไม่เกิน 5MB");
+  }
 }
 
 function cloneSampleData(): DataBundle {
@@ -289,8 +305,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const uploadAsset = useCallback(
-    async (bucket: "student-photos" | "group-icons", folder: string, file?: File | null) => {
+    async (bucket: "student-photos" | "group-icons" | "classroom-images", folder: string, file?: File | null) => {
       if (!file) return null;
+      validateImageFile(file);
 
       if (isDemoMode) {
         return fileToDataUrl(file);
@@ -312,8 +329,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addClassroom = useCallback(
-    async (draft: ClassroomDraft) => {
-      const row: Classroom = { ...draft, id: uid(), created_at: nowIso() };
+    async (draft: ClassroomDraft, imageFile?: File | null) => {
+      const id = uid();
+      const imageUrl = (await uploadAsset("classroom-images", id, imageFile)) ?? draft.image_url ?? null;
+      const row: Classroom = { ...draft, id, image_url: imageUrl, created_at: nowIso() };
       if (isDemoMode) {
         mutateDemo((current) => ({ ...current, classrooms: [row, ...current.classrooms] }));
         return;
@@ -322,23 +341,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (insertError) throw insertError;
       await refresh();
     },
-    [isDemoMode, mutateDemo, refresh]
+    [isDemoMode, mutateDemo, refresh, uploadAsset]
   );
 
   const updateClassroom = useCallback(
-    async (id: string, draft: Partial<ClassroomDraft>) => {
+    async (id: string, draft: Partial<ClassroomDraft>, imageFile?: File | null) => {
+      const imageUrl = imageFile ? await uploadAsset("classroom-images", id, imageFile) : undefined;
+      const patch = imageUrl ? { ...draft, image_url: imageUrl } : draft;
+
       if (isDemoMode) {
         mutateDemo((current) => ({
           ...current,
-          classrooms: current.classrooms.map((classroom) => (classroom.id === id ? { ...classroom, ...draft } : classroom))
+          classrooms: current.classrooms.map((classroom) => (classroom.id === id ? { ...classroom, ...patch } : classroom))
         }));
         return;
       }
-      const { error: updateError } = await getSupabaseBrowserClient().from("classrooms").update(draft).eq("id", id);
+      const { error: updateError } = await getSupabaseBrowserClient().from("classrooms").update(patch).eq("id", id);
       if (updateError) throw updateError;
       await refresh();
     },
-    [isDemoMode, mutateDemo, refresh]
+    [isDemoMode, mutateDemo, refresh, uploadAsset]
   );
 
   const deleteClassroom = useCallback(

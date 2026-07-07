@@ -5,9 +5,13 @@ create table if not exists public.classrooms (
   name text not null,
   grade_level text not null,
   academic_year text not null,
+  image_url text,
   status text not null default 'active' check (status in ('active', 'inactive')),
   created_at timestamptz not null default now()
 );
+
+alter table public.classrooms
+  add column if not exists image_url text;
 
 create table if not exists public.groups (
   id uuid primary key default gen_random_uuid(),
@@ -306,7 +310,8 @@ grant execute on function public.get_student_score_by_code(text) to anon, authen
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
   ('student-photos', 'student-photos', true, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
-  ('group-icons', 'group-icons', true, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+  ('group-icons', 'group-icons', true, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  ('classroom-images', 'classroom-images', true, 5242880, array['image/png', 'image/jpeg', 'image/webp'])
 on conflict (id) do update set
   public = excluded.public,
   file_size_limit = excluded.file_size_limit,
@@ -319,20 +324,20 @@ drop policy if exists "authenticated delete classroom assets" on storage.objects
 create policy "public read classroom assets"
 on storage.objects for select
 to anon, authenticated
-using (bucket_id in ('student-photos', 'group-icons'));
+using (bucket_id in ('student-photos', 'group-icons', 'classroom-images'));
 
 create policy "authenticated upload classroom assets"
 on storage.objects for insert
 to authenticated
-with check (bucket_id in ('student-photos', 'group-icons'));
+with check (bucket_id in ('student-photos', 'group-icons', 'classroom-images'));
 
 create policy "authenticated update classroom assets"
 on storage.objects for update
 to authenticated
-using (bucket_id in ('student-photos', 'group-icons'))
-with check (bucket_id in ('student-photos', 'group-icons'));
+using (bucket_id in ('student-photos', 'group-icons', 'classroom-images'))
+with check (bucket_id in ('student-photos', 'group-icons', 'classroom-images'));
 
 create policy "authenticated delete classroom assets"
 on storage.objects for delete
 to authenticated
-using (bucket_id in ('student-photos', 'group-icons'));
+using (bucket_id in ('student-photos', 'group-icons', 'classroom-images'));

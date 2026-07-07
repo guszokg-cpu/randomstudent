@@ -9,6 +9,7 @@ export const sampleData: DataBundle = {
       name: "ป.4/1",
       grade_level: "ป.4",
       academic_year: "2569",
+      image_url: null,
       status: "active",
       created_at: createdAt
     },
@@ -17,6 +18,7 @@ export const sampleData: DataBundle = {
       name: "ป.5/1",
       grade_level: "ป.5",
       academic_year: "2569",
+      image_url: null,
       status: "active",
       created_at: createdAt
     },
@@ -25,6 +27,7 @@ export const sampleData: DataBundle = {
       name: "ป.6/1",
       grade_level: "ป.6",
       academic_year: "2569",
+      image_url: null,
       status: "active",
       created_at: createdAt
     }

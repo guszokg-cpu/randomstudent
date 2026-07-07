@@ -166,32 +166,51 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-3">
               {classroomsWithSummary.map(({ classroom, studentCount, todayCount, stars }) => (
-                <div key={classroom.id} className="game-card-hover grid gap-3 rounded-2xl border border-violet-100 bg-gradient-to-r from-white to-violet-50/70 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
-                  <div className="flex items-start gap-3">
-                    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-700/20">
-                      <Rocket className="h-6 w-6" />
+                <div
+                  key={classroom.id}
+                  className="game-card-hover grid gap-4 overflow-hidden rounded-[1.5rem] border border-violet-100 bg-gradient-to-r from-white via-white to-violet-50/80 p-4 shadow-lg shadow-violet-950/5 md:grid-cols-[128px_1fr] lg:grid-cols-[128px_1fr_auto] lg:items-center"
+                >
+                  <ClassroomCardImage imageUrl={classroom.image_url} name={classroom.name} />
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-2xl font-black text-violet-950">{classroom.name}</p>
+                      <Star className="h-5 w-5 fill-amber-300 text-amber-300" />
                     </div>
-                    <div>
-                      <p className="text-lg font-black text-violet-950">{classroom.name}</p>
-                      <p className="text-sm font-semibold text-slate-500">
-                        {classroom.grade_level} · ปีการศึกษา {classroom.academic_year}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                        <span className="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-200">นักเรียน {studentCount} คน</span>
-                        <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 ring-1 ring-amber-100">ดาวสะสม {formatStars(stars)}</span>
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-100">วันนี้ {todayCount} รายการ</span>
-                      </div>
+                    <p className="mt-1 text-sm font-bold text-slate-500">
+                      {classroom.grade_level} · ปีการศึกษา {classroom.academic_year}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
+                      <span className="inline-flex items-center gap-1.5 rounded-2xl bg-sky-50 px-3 py-2 text-sky-700 ring-1 ring-sky-100">
+                        <Users className="h-4 w-4" />
+                        นักเรียน {studentCount} คน
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-2xl bg-amber-50 px-3 py-2 text-amber-700 ring-1 ring-amber-100">
+                        <Star className="h-4 w-4 fill-current" />
+                        ดาวสะสม {formatStars(stars)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-700 ring-1 ring-emerald-100">
+                        <ClipboardList className="h-4 w-4" />
+                        วันนี้ {todayCount} รายการ
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
+
+                  <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[170px] lg:grid-cols-1">
                     <Link href={`/students?classroom=${classroom.id}`}>
-                      <Button variant="light">นักเรียน</Button>
+                      <Button variant="light" className="w-full">
+                        <Users className="h-4 w-4" />
+                        นักเรียน
+                      </Button>
                     </Link>
                     <Link href={`/groups?classroom=${classroom.id}`}>
-                      <Button variant="light">กลุ่ม</Button>
+                      <Button variant="light" className="w-full">
+                        <UsersRound className="h-4 w-4" />
+                        กลุ่ม
+                      </Button>
                     </Link>
                     <Link href={`/play?classroom=${classroom.id}`}>
-                      <Button>
+                      <Button className="w-full">
                         <PlayCircle className="h-4 w-4" />
                         เริ่มภารกิจ
                       </Button>
@@ -299,6 +318,23 @@ function HeroMetric({ label, value, icon }: { label: string; value: string | num
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-amber-200">{icon}</span>
       </div>
       <p className="text-3xl font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function ClassroomCardImage({ imageUrl, name }: { imageUrl: string | null; name: string }) {
+  return (
+    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] border-4 border-white bg-violet-50 shadow-xl shadow-violet-950/10 md:h-32 md:w-32">
+      {imageUrl ? (
+        <img src={imageUrl} alt={`ภาพประจำห้อง ${name}`} className="h-full w-full object-cover" />
+      ) : (
+        <div className="grid h-full place-items-center bg-gradient-to-br from-violet-500 via-fuchsia-500 to-amber-300 text-white">
+          <Rocket className="h-10 w-10 drop-shadow" />
+        </div>
+      )}
+      <span className="absolute left-0 top-0 grid h-10 w-10 place-items-center rounded-br-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg">
+        <Rocket className="h-5 w-5" />
+      </span>
     </div>
   );
 }

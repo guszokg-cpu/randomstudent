@@ -71,18 +71,22 @@ for (const table of tableChecks) {
   failed = failed || !ok;
 }
 
+const { error: classroomImageColumnError } = await supabase.from("classrooms").select("id,image_url").limit(1);
+printResult(!classroomImageColumnError, "Column classrooms.image_url", classroomImageColumnError?.message ?? "reachable");
+failed = failed || Boolean(classroomImageColumnError);
+
 const { error: rpcError } = await supabase.rpc("get_student_score_by_code", { lookup_code: "__codex_check__" });
 printResult(!rpcError, "RPC get_student_score_by_code", rpcError?.message ?? "reachable");
 failed = failed || Boolean(rpcError);
 
-for (const bucket of ["student-photos", "group-icons"]) {
+for (const bucket of ["student-photos", "group-icons", "classroom-images"]) {
   const { data } = supabase.storage.from(bucket).getPublicUrl("__codex_check__.png");
   printResult(Boolean(data.publicUrl), `Storage bucket ${bucket}`, data.publicUrl ? "public URL can be generated" : "not available");
   failed = failed || !data.publicUrl;
 }
 
 if (failed) {
-  console.log("\nSupabase check found a problem. Re-run supabase/schema.sql or supabase/fixes/001_get_student_score_rpc.sql in SQL Editor, then run this command again.");
+  console.log("\nSupabase check found a problem. Re-run supabase/schema.sql or the latest file in supabase/fixes in SQL Editor, then run this command again.");
   process.exit(1);
 }
 
