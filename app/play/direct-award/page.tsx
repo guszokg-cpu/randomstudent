@@ -28,6 +28,8 @@ export default function DirectAwardPage() {
   const [classroomId, setClassroomId] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [activity, setActivity] = useState("ตอบคำถามในห้อง");
+  const [activitySuggestionsOpen, setActivitySuggestionsOpen] = useState(false);
+  const [recentActivityNames, setRecentActivityNames] = useState<string[]>([]);
   const [targetMode, setTargetMode] = useState<TargetMode>("student");
   const [query, setQuery] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -76,6 +78,29 @@ export default function DirectAwardPage() {
           : null
       : selectedGroup?.name;
   const awardDisabled = saving || (targetMode === "student" ? selectedStudents.length === 0 : !selectedGroup || selectedGroupMembers.length === 0);
+  const activityOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    const pushName = (value: string) => {
+      const name = value.trim();
+      const key = name.toLocaleLowerCase("th-TH");
+      if (!name || seen.has(key)) return;
+      seen.add(key);
+      names.push(name);
+    };
+
+    recentActivityNames.forEach(pushName);
+    [...data.starEvents]
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+      .forEach((event) => pushName(event.activity_name));
+
+    return names.slice(0, 50);
+  }, [data.starEvents, recentActivityNames]);
+  const filteredActivityOptions = useMemo(() => {
+    const keyword = activity.trim().toLocaleLowerCase("th-TH");
+    if (!keyword) return activityOptions.slice(0, 8);
+    return activityOptions.filter((name) => name.toLocaleLowerCase("th-TH").includes(keyword)).slice(0, 8);
+  }, [activity, activityOptions]);
 
   const filteredStudents = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -98,6 +123,18 @@ export default function DirectAwardPage() {
     if (!normalized) return groups;
     return groups.filter((group) => group.name.toLowerCase().includes(normalized));
   }, [groups, query]);
+
+  function rememberActivityName(value: string) {
+    const name = value.trim();
+    if (!name) return;
+    const key = name.toLocaleLowerCase("th-TH");
+    setRecentActivityNames((current) => [name, ...current.filter((item) => item.trim().toLocaleLowerCase("th-TH") !== key)].slice(0, 20));
+  }
+
+  function chooseActivityName(name: string) {
+    setActivity(name);
+    setActivitySuggestionsOpen(false);
+  }
 
   useEffect(() => {
     setSelectedStudentIds([]);
@@ -151,6 +188,7 @@ export default function DirectAwardPage() {
           reason: reason.trim() || "แจกดาวทันทีให้ทั้งกลุ่ม",
           stars
         });
+        rememberActivityName(activity);
         setToast(`ให้สมาชิกกลุ่ม ${selectedName ?? "กลุ่ม"} ${count} คน คนละ +${formatStars(stars)} ดาวแล้ว`);
       } else {
         const awardedIds = [...selectedStudentIds];
@@ -163,6 +201,7 @@ export default function DirectAwardPage() {
           reason: awardedReason,
           stars
         });
+        rememberActivityName(activity);
         setAwardedStudentIds((current) => Array.from(new Set([...current, ...awardedIds])));
         setAwardedStudentRecords((current) => [
           ...awardedIds.map((studentId) => ({
@@ -241,7 +280,55 @@ export default function DirectAwardPage() {
             </div>
             <div>
               <Label>ชื่อกิจกรรม</Label>
-              <TextInput value={activity} onChange={(event) => setActivity(event.target.value)} placeholder="เช่น ตอบคำถามในห้อง" />
+              <div className="relative">
+                <TextInput
+                  value={activity}
+                  onChange={(event) => {
+                    setActivity(event.target.value);
+                    setActivitySuggestionsOpen(true);
+                  }}
+                  onFocus={() => setActivitySuggestionsOpen(true)}
+                  onBlur={() => window.setTimeout(() => setActivitySuggestionsOpen(false), 120)}
+                  placeholder="เช่น ตอบคำถามในห้อง"
+                  autoComplete="off"
+                />
+                {activitySuggestionsOpen ? (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-2xl shadow-violet-950/15">
+                    <div className="flex items-center justify-between gap-3 border-b border-violet-50 px-3 py-2">
+                      <p className="text-xs font-black text-violet-700">กิจกรรมย้อนหลัง</p>
+                      {activityOptions.length > 0 ? <p className="text-[11px] font-bold text-slate-400">ล่าสุดก่อน</p> : null}
+                    </div>
+                    {activityOptions.length === 0 ? (
+                      <p className="px-3 py-3 text-sm font-bold text-slate-500">ยังไม่มีกิจกรรมย้อนหลัง</p>
+                    ) : filteredActivityOptions.length > 0 ? (
+                      <div className="max-h-60 overflow-y-auto p-1">
+                        {filteredActivityOptions.map((name) => {
+                          const selected = activity.trim().toLocaleLowerCase("th-TH") === name.toLocaleLowerCase("th-TH");
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-black transition",
+                                selected ? "bg-violet-50 text-violet-800" : "text-violet-950 hover:bg-violet-50"
+                              )}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                chooseActivityName(name);
+                              }}
+                            >
+                              <span className="truncate">{name}</span>
+                              {selected ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" /> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="px-3 py-3 text-sm font-bold text-slate-500">ไม่พบกิจกรรมย้อนหลังที่ตรงกับคำค้น พิมพ์ชื่อใหม่ได้เลย</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div>
               <Label>ให้ดาวกับ</Label>
