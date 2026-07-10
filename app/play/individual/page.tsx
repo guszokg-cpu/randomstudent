@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { ArrowLeft, RefreshCcw, SkipForward, Star } from "lucide-react";
 import { StudentAvatar } from "@/components/admin/student-avatar";
 import { RepeatModeControl } from "@/components/randomizer/repeat-mode-control";
@@ -28,6 +28,10 @@ export default function IndividualPlayPage() {
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
   const [toast, setToast] = useState("");
+  const [isQuickAwarding, setIsQuickAwarding] = useState(false);
+  const [quickAwardPulse, setQuickAwardPulse] = useState(false);
+  const [lastProfileTapAt, setLastProfileTapAt] = useState(0);
+  const quickAwardingRef = useRef(false);
   const studentRoll = useDramaticDraw<Student>();
 
   useEffect(() => {
@@ -77,18 +81,48 @@ export default function IndividualPlayPage() {
   }
 
   async function award(reason: string, stars: number) {
-    if (!selected) return;
-    playPointSound();
-    await addStarEvent({
-      student_id: selected.id,
-      classroom_id: classroomId,
-      subject_id: subjectId || null,
-      activity_name: activity,
-      reason,
-      stars,
-      event_type: "student"
-    });
-    setToast(`ให้ ${selected.nickname} +${formatStars(stars)} ดาวแล้ว`);
+    if (!selected) return false;
+    try {
+      playPointSound();
+      await addStarEvent({
+        student_id: selected.id,
+        classroom_id: classroomId,
+        subject_id: subjectId || null,
+        activity_name: activity,
+        reason,
+        stars,
+        event_type: "student"
+      });
+      setToast(`ให้ ${selected.nickname} +${formatStars(stars)} ดาวแล้ว`);
+      return true;
+    } catch (caught) {
+      setToast(caught instanceof Error ? caught.message : "ให้ดาวไม่สำเร็จ");
+      return false;
+    }
+  }
+
+  async function handleProfileQuickAward() {
+    if (!selected || studentRoll.isRolling || quickAwardingRef.current) return;
+    quickAwardingRef.current = true;
+    setIsQuickAwarding(true);
+    const success = await award("ตอบถูก", 1);
+    if (success) {
+      setQuickAwardPulse(true);
+      window.setTimeout(() => setQuickAwardPulse(false), 900);
+    }
+    setIsQuickAwarding(false);
+    quickAwardingRef.current = false;
+  }
+
+  function handleProfilePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse") return;
+    const now = Date.now();
+    if (now - lastProfileTapAt <= 420) {
+      setLastProfileTapAt(0);
+      void handleProfileQuickAward();
+      return;
+    }
+    setLastProfileTapAt(now);
   }
 
   return (
@@ -115,14 +149,35 @@ export default function IndividualPlayPage() {
                 <div className={studentRoll.isRolling ? "roll-flash" : "pulse-winner"}>
                   <div className="relative mx-auto w-full max-w-[440px]">
                     <div className="absolute -inset-3 rounded-[2.5rem] bg-gradient-to-br from-amber-300/65 via-pink-300/40 to-sky-300/55 blur-xl" />
-                    <StudentAvatar
-                      name={displayStudent.full_name}
-                      photoUrl={displayPhotoUrl}
-                      size="hero"
-                      shape="rounded"
-                      className="relative mx-auto ring-8 ring-white/70"
-                    />
+                    <button
+                      type="button"
+                      className="relative mx-auto block cursor-pointer rounded-[2rem] focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 disabled:cursor-not-allowed"
+                      title="ดับเบิลคลิกที่รูปเพื่อให้ +1"
+                      aria-label={`ดับเบิลคลิกที่รูปของ ${displayStudent.nickname} เพื่อให้ตอบถูก +1`}
+                      onDoubleClick={() => void handleProfileQuickAward()}
+                      onPointerUp={handleProfilePointerUp}
+                      disabled={!selected || studentRoll.isRolling || isQuickAwarding}
+                    >
+                      <StudentAvatar
+                        name={displayStudent.full_name}
+                        photoUrl={displayPhotoUrl}
+                        size="hero"
+                        shape="rounded"
+                        className={`relative mx-auto ring-8 ring-white/70 ${quickAwardPulse ? "quick-award-profile" : ""}`}
+                      />
+                      {quickAwardPulse ? (
+                        <span className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-emerald-500 px-5 py-2 text-xl font-black text-white shadow-2xl">
+                          +1 ⭐
+                        </span>
+                      ) : null}
+                      {isQuickAwarding ? (
+                        <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-[2rem] bg-violet-950/35 text-lg font-black text-white backdrop-blur-sm">
+                          บันทึก +1...
+                        </span>
+                      ) : null}
+                    </button>
                   </div>
+                  <p className="mt-3 text-sm font-black text-emerald-600">ดับเบิลคลิกที่รูปเพื่อให้ +1</p>
                   <p className="mt-5 text-5xl font-black text-violet-900 sm:text-7xl">{displayStudent.nickname}</p>
                   <p className="text-lg font-bold text-slate-500 sm:text-2xl">{displayStudent.full_name}</p>
                   <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -154,7 +209,7 @@ export default function IndividualPlayPage() {
             </Button>
             <div className="grid gap-2">
               {STAR_SETTINGS.slice(0, 3).map((setting) => (
-                <Button key={setting.reason} variant={setting.tone === "green" ? "success" : setting.tone === "purple" ? "primary" : "warning"} onClick={() => void award(setting.reason, setting.stars)} disabled={!selected || studentRoll.isRolling}>
+                <Button key={setting.reason} variant={setting.tone === "green" ? "success" : setting.tone === "purple" ? "primary" : "warning"} onClick={() => void award(setting.reason, setting.stars)} disabled={!selected || studentRoll.isRolling || isQuickAwarding}>
                   <Star className="h-4 w-4" />
                   {setting.label} +{formatStars(setting.stars)}
                 </Button>

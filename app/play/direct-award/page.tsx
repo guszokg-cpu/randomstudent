@@ -16,13 +16,6 @@ import { useData } from "@/components/providers/data-provider";
 
 type TargetMode = "student" | "group";
 
-type AwardedStudentRecord = {
-  studentId: string;
-  reason: string;
-  stars: number;
-  awardedAt: string;
-};
-
 export default function DirectAwardPage() {
   const { data, addStudentStarEvents, addGroupMemberStarEvents } = useData();
   const [classroomId, setClassroomId] = useState("");
@@ -33,9 +26,6 @@ export default function DirectAwardPage() {
   const [targetMode, setTargetMode] = useState<TargetMode>("student");
   const [query, setQuery] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-  const [awardedStudentIds, setAwardedStudentIds] = useState<string[]>([]);
-  const [awardedStudentRecords, setAwardedStudentRecords] = useState<AwardedStudentRecord[]>([]);
-  const [showAwardedStudents, setShowAwardedStudents] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [customReason, setCustomReason] = useState("ตอบคำถามในห้อง");
   const [customStars, setCustomStars] = useState("1");
@@ -57,17 +47,6 @@ export default function DirectAwardPage() {
   const selectedStudents = students.filter((student) => selectedStudentIds.includes(student.id));
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? null;
   const selectedGroupMembers = selectedGroup ? students.filter((student) => student.group_id === selectedGroup.id) : [];
-  const availableStudents = useMemo(
-    () => students.filter((student) => !awardedStudentIds.includes(student.id)),
-    [awardedStudentIds, students]
-  );
-  const awardedStudents = useMemo(
-    () =>
-      awardedStudentRecords
-        .map((record) => ({ record, student: students.find((student) => student.id === record.studentId) ?? null }))
-        .filter((row) => row.student),
-    [awardedStudentRecords, students]
-  );
   const selectedStudentPreview = selectedStudents.slice(0, 4).map((student) => student.nickname).join(", ");
   const selectedName =
     targetMode === "student"
@@ -104,8 +83,8 @@ export default function DirectAwardPage() {
 
   const filteredStudents = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return availableStudents;
-    return availableStudents.filter((student) => {
+    if (!normalized) return students;
+    return students.filter((student) => {
       const numberText = String(student.student_number);
       return (
         numberText.includes(normalized) ||
@@ -114,7 +93,7 @@ export default function DirectAwardPage() {
         student.student_code.toLowerCase().includes(normalized)
       );
     });
-  }, [availableStudents, query]);
+  }, [query, students]);
   const visibleStudentIds = useMemo(() => filteredStudents.map((student) => student.id), [filteredStudents]);
   const allVisibleStudentsSelected = visibleStudentIds.length > 0 && visibleStudentIds.every((studentId) => selectedStudentIds.includes(studentId));
 
@@ -138,18 +117,12 @@ export default function DirectAwardPage() {
 
   useEffect(() => {
     setSelectedStudentIds([]);
-    setAwardedStudentIds([]);
-    setAwardedStudentRecords([]);
-    setShowAwardedStudents(false);
   }, [activity, classroomId, subjectId]);
 
   function handleClassroomChange(nextClassroomId: string) {
     setClassroomId(nextClassroomId);
     setSubjectId("");
     setSelectedStudentIds([]);
-    setAwardedStudentIds([]);
-    setAwardedStudentRecords([]);
-    setShowAwardedStudents(false);
     setSelectedGroupId("");
     setQuery("");
   }
@@ -202,16 +175,6 @@ export default function DirectAwardPage() {
           stars
         });
         rememberActivityName(activity);
-        setAwardedStudentIds((current) => Array.from(new Set([...current, ...awardedIds])));
-        setAwardedStudentRecords((current) => [
-          ...awardedIds.map((studentId) => ({
-            studentId,
-            reason: awardedReason,
-            stars,
-            awardedAt: new Date().toISOString()
-          })),
-          ...current
-        ]);
         setSelectedStudentIds([]);
         setToast(`ให้ดาวนักเรียน ${count} คน คนละ +${formatStars(stars)} ดาวแล้ว`);
       }
@@ -360,7 +323,7 @@ export default function DirectAwardPage() {
                 <h2 className="text-2xl font-black">{targetMode === "student" ? "เลือกนักเรียน" : "เลือกกลุ่ม"}</h2>
                 <p className="text-sm font-semibold text-slate-500">
                   {targetMode === "student"
-                    ? `เหลือให้เลือก ${availableStudents.length} คน · เลือกแล้ว ${selectedStudents.length} คน · ให้คะแนนแล้ว ${awardedStudentIds.length} คน`
+                    ? `นักเรียน ${students.length} คน · เลือกแล้ว ${selectedStudents.length} คน`
                     : `เลือกกลุ่มแล้วกระจายดาวให้สมาชิกปัจจุบันทุกคน`}
                 </p>
               </div>
@@ -385,16 +348,6 @@ export default function DirectAwardPage() {
                     >
                       ล้างที่เลือก
                     </Button>
-                    {awardedStudentRecords.length > 0 ? (
-                      <Button
-                        type="button"
-                        variant="light"
-                        className="min-h-11 whitespace-nowrap px-3 text-xs"
-                        onClick={() => setShowAwardedStudents((current) => !current)}
-                      >
-                        {showAwardedStudents ? "ซ่อนคนที่ให้แล้ว" : `ดูที่ให้แล้ว ${awardedStudentIds.length} คน`}
-                      </Button>
-                    ) : null}
                   </div>
                 ) : null}
                 <div className="relative w-full sm:max-w-xs">
@@ -478,43 +431,16 @@ export default function DirectAwardPage() {
                   <div>
                     <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
                     <h3 className="mt-3 text-2xl font-black text-violet-950">
-                      {students.length === 0 ? "ยังไม่มีนักเรียนในห้องนี้" : "ให้คะแนนครบแล้วในกิจกรรมนี้"}
+                      {students.length === 0 ? "ยังไม่มีนักเรียนในห้องนี้" : "ไม่พบนักเรียนที่ค้นหา"}
                     </h3>
                     <p className="mt-1 text-sm font-bold text-slate-500">
                       {students.length === 0
                         ? "เพิ่มรายชื่อนักเรียนก่อนเริ่มให้ดาว"
-                        : "ถ้าต้องการเริ่มรอบใหม่ ให้เปลี่ยนชื่อกิจกรรม ห้องเรียน หรือรายวิชา"}
+                        : "ลองล้างคำค้นหา หรือค้นหาด้วยเลขที่ ชื่อจริง หรือชื่อเล่น"}
                     </p>
                   </div>
                 </div>
               )}
-
-              {showAwardedStudents && awardedStudents.length > 0 ? (
-                <div className="mt-5 rounded-[1.5rem] border border-emerald-100 bg-emerald-50/80 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-black text-emerald-900">ให้คะแนนแล้วในรอบนี้</h3>
-                      <p className="text-xs font-bold text-emerald-700">รายการนี้ถูกซ่อนออกจากช่องเลือกแล้ว เพื่อกันกดซ้ำ</p>
-                    </div>
-                    <Button type="button" variant="ghost" className="min-h-10 px-3 text-xs" onClick={() => setShowAwardedStudents(false)}>
-                      ซ่อน
-                    </Button>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {awardedStudents.map(({ record, student }) => (
-                      <div key={`${record.studentId}-${record.awardedAt}`} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
-                        <div className="min-w-0">
-                          <p className="truncate font-black text-violet-950">{student?.nickname}</p>
-                          <p className="truncate text-xs font-bold text-slate-500">{student?.full_name}</p>
-                        </div>
-                        <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-sm font-black text-amber-700">
-                          +{formatStars(record.stars)} ⭐
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
               </>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
