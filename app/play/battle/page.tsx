@@ -15,7 +15,7 @@ import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from
 import { playPointSound, playRandomFinishSound, playRandomStartSound, stopRandomRollingSound } from "@/lib/sound-effects";
 import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Group, Student } from "@/lib/types";
-import { pickOne } from "@/lib/utils";
+import { formatStars, pickOne } from "@/lib/utils";
 import { useData } from "@/components/providers/data-provider";
 
 export default function BattlePage() {
@@ -35,6 +35,8 @@ export default function BattlePage() {
   const [pickedRepIdsByGroup, setPickedRepIdsByGroup] = useState<Record<string, string[]>>({});
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
   const [pairRolling, setPairRolling] = useState(false);
+  const [savingBothGroups, setSavingBothGroups] = useState(false);
+  const [toast, setToast] = useState("");
   const intervalRef = useRef<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
   const leftRepRoll = useDramaticDraw<Student>();
@@ -150,7 +152,7 @@ export default function BattlePage() {
   async function awardGroup(group: Group | null, stars: number) {
     if (!group) return;
     playPointSound();
-    await addGroupMemberStarEvents({
+    const count = await addGroupMemberStarEvents({
       group_id: group.id,
       classroom_id: classroomId,
       subject_id: subjectId || null,
@@ -158,6 +160,37 @@ export default function BattlePage() {
       reason: "ชนะกิจกรรมคู่แข่ง",
       stars
     });
+    setToast(`ให้สมาชิกกลุ่ม ${group.name} ${count} คน คนละ +${formatStars(stars)} แล้ว`);
+  }
+
+  async function awardBothGroups() {
+    if (!left || !right || savingBothGroups) return;
+    setSavingBothGroups(true);
+    setToast("");
+    try {
+      playPointSound();
+      const leftCount = await addGroupMemberStarEvents({
+        group_id: left.id,
+        classroom_id: classroomId,
+        subject_id: subjectId || null,
+        activity_name: activity,
+        reason: "ชนะกิจกรรมคู่แข่ง",
+        stars: 1
+      });
+      const rightCount = await addGroupMemberStarEvents({
+        group_id: right.id,
+        classroom_id: classroomId,
+        subject_id: subjectId || null,
+        activity_name: activity,
+        reason: "ชนะกิจกรรมคู่แข่ง",
+        stars: 1
+      });
+      setToast(`ให้ดาวสมาชิกทั้งสองทีมรวม ${leftCount + rightCount} คน คนละ +${formatStars(1)} แล้ว`);
+    } catch (caught) {
+      setToast(caught instanceof Error ? caught.message : "ให้ดาวสมาชิกทั้งสองทีมไม่สำเร็จ");
+    } finally {
+      setSavingBothGroups(false);
+    }
   }
 
   return (
@@ -212,11 +245,12 @@ export default function BattlePage() {
           />
         </section>
         <div className="mt-5 flex justify-center">
-          <Button variant="primary" disabled={!left || !right || leftMemberCount === 0 || rightMemberCount === 0 || pairRolling || leftRepRoll.isRolling || rightRepRoll.isRolling} onClick={() => { void awardGroup(left, 1); void awardGroup(right, 1); }}>
+          <Button variant="primary" disabled={!left || !right || leftMemberCount === 0 || rightMemberCount === 0 || pairRolling || leftRepRoll.isRolling || rightRepRoll.isRolling || savingBothGroups} onClick={() => void awardBothGroups()}>
             <Trophy className="h-4 w-4" />
-            ให้สมาชิกทั้งสองทีม
+            {savingBothGroups ? "กำลังให้ดาว..." : "ให้สมาชิกทั้งสองทีม"}
           </Button>
         </div>
+        {toast ? <p className="mx-auto mt-4 max-w-xl rounded-2xl bg-white/95 p-3 text-center font-black text-emerald-600">{toast}</p> : null}
       </div>
     </main>
   );

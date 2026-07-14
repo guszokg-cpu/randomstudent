@@ -14,11 +14,11 @@ import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from
 import { playPointSound } from "@/lib/sound-effects";
 import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Student } from "@/lib/types";
-import { pickOne } from "@/lib/utils";
+import { formatStars, pickOne } from "@/lib/utils";
 import { useData } from "@/components/providers/data-provider";
 
 export default function HelperPage() {
-  const { data, addStarEvent, logRandom } = useData();
+  const { data, addStudentStarEvents, logRandom } = useData();
   const [classroomId, setClassroomId] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [activity, setActivity] = useState("ภารกิจช่วยเพื่อน");
@@ -29,6 +29,8 @@ export default function HelperPage() {
   const [pickedMainIds, setPickedMainIds] = useState<string[]>([]);
   const [pickedHelperIds, setPickedHelperIds] = useState<string[]>([]);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
+  const [savingAward, setSavingAward] = useState(false);
+  const [toast, setToast] = useState("");
   const mainRoll = useDramaticDraw<Student>();
   const helperRoll = useDramaticDraw<Student>();
 
@@ -105,20 +107,24 @@ export default function HelperPage() {
   async function awardBoth() {
     const targets = [mainStudent, helper].filter(Boolean) as Student[];
     if (targets.length === 0) return;
-    playPointSound();
-    await Promise.all(
-      targets.map((student) =>
-        addStarEvent({
-          student_id: student.id,
-          classroom_id: classroomId,
-          subject_id: subjectId || null,
-          activity_name: activity,
-          reason: "ช่วยกันตอบคำถาม",
-          stars: 1,
-          event_type: "student"
-        })
-      )
-    );
+    setSavingAward(true);
+    setToast("");
+    try {
+      playPointSound();
+      const count = await addStudentStarEvents({
+        student_ids: targets.map((student) => student.id),
+        classroom_id: classroomId,
+        subject_id: subjectId || null,
+        activity_name: activity,
+        reason: "ช่วยกันตอบคำถาม",
+        stars: 1
+      });
+      setToast(`ให้ดาว ${count} คน คนละ +${formatStars(1)} แล้ว`);
+    } catch (caught) {
+      setToast(caught instanceof Error ? caught.message : "ให้ดาวทั้งคู่ไม่สำเร็จ");
+    } finally {
+      setSavingAward(false);
+    }
   }
 
   return (
@@ -154,11 +160,12 @@ export default function HelperPage() {
           <StudentDisplay title="เพื่อนช่วยคิด" student={displayHelper} photoUrl={displayHelperPhotoUrl} rolling={helperRoll.isRolling} trail={helperRoll.trail.map((student) => student.nickname)} />
         </section>
         <div className="mt-5 flex justify-center">
-          <Button variant="success" className="min-h-14 px-8 text-lg" disabled={!mainStudent || !helper || mainRoll.isRolling || helperRoll.isRolling} onClick={() => void awardBoth()}>
+          <Button variant="success" className="min-h-14 px-8 text-lg" disabled={!mainStudent || !helper || mainRoll.isRolling || helperRoll.isRolling || savingAward} onClick={() => void awardBoth()}>
             <Star className="h-5 w-5" />
-            ตอบได้ด้วยกัน +1 ดาวทั้งคู่
+            {savingAward ? "กำลังให้ดาว..." : "ตอบได้ด้วยกัน +1 ดาวทั้งคู่"}
           </Button>
         </div>
+        {toast ? <p className="mx-auto mt-4 max-w-xl rounded-2xl bg-white/95 p-3 text-center font-black text-emerald-600">{toast}</p> : null}
       </div>
     </main>
   );

@@ -13,11 +13,11 @@ import { excludedWhenUnique, isUniqueMode, nextPickedIds, type RepeatMode } from
 import { playPointSound, playRandomFinishSound, playRandomStartSound, stopRandomRollingSound } from "@/lib/sound-effects";
 import { resolvePlaySession } from "@/lib/teaching-session";
 import type { Group, Student } from "@/lib/types";
-import { pickOne } from "@/lib/utils";
+import { formatStars, pickOne } from "@/lib/utils";
 import { useData } from "@/components/providers/data-provider";
 
 export default function StudentBattlePage() {
-  const { data, addStarEvent, logRandom } = useData();
+  const { data, addStarEvent, addStudentStarEvents, logRandom } = useData();
   const [classroomId, setClassroomId] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [activity, setActivity] = useState("โจทย์ดวลตอบไว");
@@ -30,6 +30,8 @@ export default function StudentBattlePage() {
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
   const [rolling, setRolling] = useState(false);
+  const [savingBoth, setSavingBoth] = useState(false);
+  const [toast, setToast] = useState("");
   const intervalRef = useRef<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
@@ -116,6 +118,29 @@ export default function StudentBattlePage() {
       stars,
       event_type: "student"
     });
+    setToast(`ให้ ${student.nickname} +${formatStars(stars)} ดาวแล้ว`);
+  }
+
+  async function awardBothStudents() {
+    if (!left || !right || savingBoth) return;
+    setSavingBoth(true);
+    setToast("");
+    try {
+      playPointSound();
+      const count = await addStudentStarEvents({
+        student_ids: [left.id, right.id],
+        classroom_id: classroomId,
+        subject_id: subjectId || null,
+        activity_name: activity,
+        reason: "ชนะดวลตอบไว",
+        stars: 1
+      });
+      setToast(`ให้ดาว ${count} คน คนละ +${formatStars(1)} แล้ว`);
+    } catch (caught) {
+      setToast(caught instanceof Error ? caught.message : "ให้ดาวทั้งสองคนไม่สำเร็จ");
+    } finally {
+      setSavingBoth(false);
+    }
   }
 
   return (
@@ -149,11 +174,12 @@ export default function StudentBattlePage() {
           <StudentBattleCard student={displayRight} photoUrl={displayRightPhotoUrl} rolling={rolling} title="ผู้ท้าดวลคนที่ 2" groups={data.groups} onAward={() => void awardStudent(right, 1)} />
         </section>
         <div className="mt-5 flex justify-center">
-          <Button variant="primary" disabled={!left || !right || rolling} onClick={() => { void awardStudent(left, 1); void awardStudent(right, 1); }}>
+          <Button variant="primary" disabled={!left || !right || rolling || savingBoth} onClick={() => void awardBothStudents()}>
             <Trophy className="h-4 w-4" />
-            ให้ดาวทั้งสองคน
+            {savingBoth ? "กำลังให้ดาว..." : "ให้ดาวทั้งสองคน"}
           </Button>
         </div>
+        {toast ? <p className="mx-auto mt-4 max-w-xl rounded-2xl bg-white/95 p-3 text-center font-black text-emerald-600">{toast}</p> : null}
       </div>
     </main>
   );
