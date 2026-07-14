@@ -29,7 +29,7 @@ export default function StudentBattlePage() {
   const [rollRight, setRollRight] = useState<Student | null>(null);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
-  const [rolling, setRolling] = useState(false);
+  const [rollingSide, setRollingSide] = useState<"both" | "left" | "right" | null>(null);
   const [savingBoth, setSavingBoth] = useState(false);
   const [toast, setToast] = useState("");
   const intervalRef = useRef<number | null>(null);
@@ -59,6 +59,7 @@ export default function StudentBattlePage() {
       : rightPhotoUrl ?? primaryStudentPhoto(data.studentPhotos, displayRight)
     : null;
   const avoidRepeat = isUniqueMode(repeatMode);
+  const rolling = rollingSide !== null;
 
   useEffect(() => {
     return () => {
@@ -79,7 +80,7 @@ export default function StudentBattlePage() {
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
     setLeftPhotoUrl(null);
     setRightPhotoUrl(null);
-    setRolling(true);
+    setRollingSide("both");
     playRandomStartSound(RANDOM_DRAW_DURATION_MS);
 
     intervalRef.current = window.setInterval(() => {
@@ -98,11 +99,57 @@ export default function StudentBattlePage() {
       setRight(second);
       setLeftPhotoUrl(randomStudentPhoto(data.studentPhotos, first));
       setRightPhotoUrl(randomStudentPhoto(data.studentPhotos, second));
-      setRolling(false);
+      setRollingSide(null);
       playRandomFinishSound();
       setPickedIds((current) => nextPickedIds(current, [first.id, second.id], students.length, avoidRepeat));
       void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, student_id: first.id, mode: "battle-student" });
       void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, student_id: second.id, mode: "battle-student" });
+    }, RANDOM_DRAW_DURATION_MS);
+  }
+
+  function drawStudent(side: "left" | "right") {
+    if (rolling || students.length < 2) return;
+    const lockedStudent = side === "left" ? right : left;
+    const pool = lockedStudent ? students.filter((student) => student.id !== lockedStudent.id) : students;
+    const availablePicked = pickedIds.filter((id) => pool.some((student) => student.id === id));
+    const excluded = excludedWhenUnique(availablePicked, pool.length, 1, avoidRepeat);
+    const winner = pickOne(pool, excluded, (student) => student.id);
+    if (!winner) return;
+
+    if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    if (side === "left") {
+      setRollLeft(null);
+      setLeftPhotoUrl(null);
+    } else {
+      setRollRight(null);
+      setRightPhotoUrl(null);
+    }
+    setRollingSide(side);
+    playRandomStartSound(RANDOM_DRAW_DURATION_MS);
+
+    intervalRef.current = window.setInterval(() => {
+      const preview = pickOne(pool);
+      if (side === "left") setRollLeft(preview);
+      else setRollRight(preview);
+    }, 75);
+
+    timeoutRef.current = window.setTimeout(() => {
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      if (side === "left") {
+        setRollLeft(null);
+        setLeft(winner);
+        setLeftPhotoUrl(randomStudentPhoto(data.studentPhotos, winner));
+      } else {
+        setRollRight(null);
+        setRight(winner);
+        setRightPhotoUrl(randomStudentPhoto(data.studentPhotos, winner));
+      }
+      setRollingSide(null);
+      playRandomFinishSound();
+      setPickedIds((current) => nextPickedIds(current, [winner.id], students.length, avoidRepeat));
+      void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, student_id: winner.id, mode: "battle-student" });
     }, RANDOM_DRAW_DURATION_MS);
   }
 
@@ -165,13 +212,31 @@ export default function StudentBattlePage() {
 
         <h1 className="display-title mb-6 text-center text-4xl font-black sm:text-6xl">ดวลตอบไวรายคน</h1>
         <section className="grid items-stretch gap-4 lg:grid-cols-[1fr_auto_1fr]">
-          <StudentBattleCard student={displayLeft} photoUrl={displayLeftPhotoUrl} rolling={rolling} title="ผู้ท้าดวลคนที่ 1" groups={data.groups} onAward={() => void awardStudent(left, 1)} />
+          <StudentBattleCard
+            student={displayLeft}
+            photoUrl={displayLeftPhotoUrl}
+            rolling={rollingSide === "both" || rollingSide === "left"}
+            title="ผู้ท้าดวลคนที่ 1"
+            groups={data.groups}
+            onAward={() => void awardStudent(left, 1)}
+            onReroll={() => drawStudent("left")}
+            rerollDisabled={rolling || savingBoth}
+          />
           <div className="grid place-items-center">
             <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-rose-500 shadow-2xl">
               <Swords className="h-12 w-12" />
             </div>
           </div>
-          <StudentBattleCard student={displayRight} photoUrl={displayRightPhotoUrl} rolling={rolling} title="ผู้ท้าดวลคนที่ 2" groups={data.groups} onAward={() => void awardStudent(right, 1)} />
+          <StudentBattleCard
+            student={displayRight}
+            photoUrl={displayRightPhotoUrl}
+            rolling={rollingSide === "both" || rollingSide === "right"}
+            title="ผู้ท้าดวลคนที่ 2"
+            groups={data.groups}
+            onAward={() => void awardStudent(right, 1)}
+            onReroll={() => drawStudent("right")}
+            rerollDisabled={rolling || savingBoth}
+          />
         </section>
         <div className="mt-5 flex justify-center">
           <Button variant="primary" disabled={!left || !right || rolling || savingBoth} onClick={() => void awardBothStudents()}>
@@ -191,7 +256,9 @@ function StudentBattleCard({
   rolling,
   title,
   groups,
-  onAward
+  onAward,
+  onReroll,
+  rerollDisabled
 }: {
   student: Student | null;
   photoUrl: string | null;
@@ -199,6 +266,8 @@ function StudentBattleCard({
   title: string;
   groups: Group[];
   onAward: () => void;
+  onReroll: () => void;
+  rerollDisabled: boolean;
 }) {
   const group = student ? studentGroup(groups, student) : null;
 
@@ -214,10 +283,16 @@ function StudentBattleCard({
             <div className="rounded-2xl bg-sky-50 p-3 font-black text-sky-700">เลขที่ {student.student_number}</div>
             <div className="rounded-2xl bg-violet-50 p-3 font-black text-violet-700">{group?.name ?? "ยังไม่มีกลุ่ม"}</div>
           </div>
-          <Button className="mt-5" variant="success" onClick={onAward} disabled={rolling}>
-            <Star className="h-4 w-4" />
-            ชนะ +1 ดาว
-          </Button>
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+            <Button data-sound="off" variant="secondary" onClick={onReroll} disabled={rerollDisabled}>
+              <RefreshCcw className="h-4 w-4" />
+              สุ่มคนนี้ใหม่
+            </Button>
+            <Button variant="success" onClick={onAward} disabled={rolling}>
+              <Star className="h-4 w-4" />
+              ชนะ +1 ดาว
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="grid min-h-[420px] place-items-center text-2xl font-black text-slate-400">รอสุ่มคู่ดวล</div>

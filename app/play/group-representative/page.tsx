@@ -27,7 +27,7 @@ export default function GroupRepresentativePage() {
   const [representativePhotos, setRepresentativePhotos] = useState<Record<string, string | null>>({});
   const [pickedIdsByGroup, setPickedIdsByGroup] = useState<Record<string, string[]>>({});
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
-  const [rolling, setRolling] = useState(false);
+  const [rollingTarget, setRollingTarget] = useState<"all" | string | null>(null);
   const intervalRef = useRef<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
@@ -44,6 +44,7 @@ export default function GroupRepresentativePage() {
   const classroom = data.classrooms.find((item) => item.id === classroomId) ?? null;
   const subject = data.subjects.find((item) => item.id === subjectId) ?? null;
   const avoidRepeat = isUniqueMode(repeatMode);
+  const rolling = rollingTarget !== null;
 
   useEffect(() => {
     return () => {
@@ -65,7 +66,7 @@ export default function GroupRepresentativePage() {
 
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
-    setRolling(true);
+    setRollingTarget("all");
     setRollingRepresentatives({});
     setRepresentativePhotos({});
     playRandomStartSound(RANDOM_DRAW_DURATION_MS);
@@ -87,7 +88,7 @@ export default function GroupRepresentativePage() {
       setRepresentativePhotos(
         Object.fromEntries(Object.entries(next).map(([groupId, student]) => [groupId, randomStudentPhoto(data.studentPhotos, student)]))
       );
-      setRolling(false);
+      setRollingTarget(null);
       playRandomFinishSound();
       setPickedIdsByGroup((current) => {
         const updated = { ...current };
@@ -100,6 +101,40 @@ export default function GroupRepresentativePage() {
       Object.entries(next).forEach(([groupId, member]) => {
         void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, student_id: member.id, group_id: groupId, mode: "group-representative" });
       });
+    }, RANDOM_DRAW_DURATION_MS);
+  }
+
+  function drawOne(groupId: string) {
+    if (rolling) return;
+    const members = students.filter((student) => student.group_id === groupId);
+    const excluded = excludedWhenUnique(pickedIdsByGroup[groupId] ?? [], members.length, 1, avoidRepeat);
+    const member = pickOne(members, excluded, (student) => student.id);
+    if (!member) return;
+
+    if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    setRollingTarget(groupId);
+    setRollingRepresentatives({});
+    playRandomStartSound(RANDOM_DRAW_DURATION_MS);
+
+    intervalRef.current = window.setInterval(() => {
+      const preview = pickOne(members);
+      setRollingRepresentatives(preview ? { [groupId]: preview } : {});
+    }, 85);
+
+    timeoutRef.current = window.setTimeout(() => {
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      setRollingRepresentatives({});
+      setRepresentatives((current) => ({ ...current, [groupId]: member }));
+      setRepresentativePhotos((current) => ({ ...current, [groupId]: randomStudentPhoto(data.studentPhotos, member) }));
+      setRollingTarget(null);
+      playRandomFinishSound();
+      setPickedIdsByGroup((current) => ({
+        ...current,
+        [groupId]: nextPickedIds(current[groupId] ?? [], [member.id], members.length, avoidRepeat)
+      }));
+      void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, student_id: member.id, group_id: groupId, mode: "group-representative" });
     }, RANDOM_DRAW_DURATION_MS);
   }
 
@@ -154,6 +189,7 @@ export default function GroupRepresentativePage() {
           {groups.map((group) => {
             const student = rollingRepresentatives[group.id] ?? representatives[group.id];
             const memberCount = students.filter((item) => item.group_id === group.id).length;
+            const cardRolling = rollingTarget === "all" || rollingTarget === group.id;
             const photoUrl = student
               ? rollingRepresentatives[group.id]
                 ? primaryStudentPhoto(data.studentPhotos, student)
@@ -166,11 +202,15 @@ export default function GroupRepresentativePage() {
                 </div>
                 <p className="mt-3 text-2xl font-black">{group.name}</p>
                 {student ? (
-                  <div className={rolling ? "roll-flash mt-4 rounded-2xl bg-violet-50 p-4" : "mt-4 rounded-2xl bg-violet-50 p-4"}>
+                  <div className={cardRolling ? "roll-flash mt-4 rounded-2xl bg-violet-50 p-4" : "mt-4 rounded-2xl bg-violet-50 p-4"}>
                     <StudentAvatar name={student.full_name} photoUrl={photoUrl} size="lg" className="mx-auto" />
                     <p className="mt-2 text-3xl font-black text-violet-900">{student.nickname}</p>
-                    {rolling ? <p className="mt-1 text-sm font-black text-amber-600">กำลังหมุนชื่อ...</p> : null}
+                    {cardRolling ? <p className="mt-1 text-sm font-black text-amber-600">กำลังหมุนชื่อ...</p> : null}
                     <div className="mt-3 grid gap-2">
+                      <Button data-sound="off" variant="secondary" onClick={() => drawOne(group.id)} disabled={rolling || memberCount === 0}>
+                        <RefreshCcw className="h-4 w-4" />
+                        สุ่มคนนี้ใหม่
+                      </Button>
                       <Button variant="success" onClick={() => void awardStudent(student, 1)} disabled={rolling}>
                         <Star className="h-4 w-4" />
                         รายคน +{formatStars(1)}
@@ -182,7 +222,13 @@ export default function GroupRepresentativePage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-5 rounded-2xl bg-slate-50 p-5 font-bold text-slate-500">รอสุ่มตัวแทน</p>
+                  <div className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-5">
+                    <p className="font-bold text-slate-500">รอสุ่มตัวแทน</p>
+                    <Button data-sound="off" variant="secondary" onClick={() => drawOne(group.id)} disabled={rolling || memberCount === 0}>
+                      <RefreshCcw className="h-4 w-4" />
+                      สุ่มตัวแทนทีมนี้
+                    </Button>
+                  </div>
                 )}
               </div>
             );

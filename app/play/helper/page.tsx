@@ -60,15 +60,14 @@ export default function HelperPage() {
   const avoidRepeat = isUniqueMode(repeatMode);
 
   function drawMain() {
-    const excluded = excludedWhenUnique(pickedMainIds, students.length, 1, avoidRepeat);
-    const winner = pickOne(students, excluded, (student) => student.id);
+    const pool = students.filter((student) => student.id !== helper?.id);
+    const availablePicked = pickedMainIds.filter((id) => pool.some((student) => student.id === id));
+    const excluded = excludedWhenUnique(availablePicked, pool.length, 1, avoidRepeat);
+    const winner = pickOne(pool, excluded, (student) => student.id);
     if (!winner) return;
-    setHelper(null);
-    setHelperPhotoUrl(null);
     setMainPhotoUrl(null);
-    helperRoll.reset();
     mainRoll.start({
-      pool: students,
+      pool,
       winner,
       getId: (student) => student.id,
       durationMs: 5000,
@@ -76,7 +75,7 @@ export default function HelperPage() {
       onFinish: () => {
         setMainStudent(winner);
         setMainPhotoUrl(randomStudentPhoto(data.studentPhotos, winner));
-        setPickedMainIds((current) => nextPickedIds(current, [winner.id], students.length, avoidRepeat));
+        setPickedMainIds((current) => nextPickedIds(current.filter((id) => pool.some((student) => student.id === id)), [winner.id], pool.length, avoidRepeat));
         void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, student_id: winner.id, mode: "helper" });
       }
     });
@@ -140,11 +139,11 @@ export default function HelperPage() {
           <div className="flex gap-2">
             <Button data-sound="off" variant="warning" onClick={drawMain} disabled={mainRoll.isRolling || helperRoll.isRolling}>
               <RefreshCcw className="h-4 w-4" />
-              {mainRoll.isRolling ? "กำลังลุ้น..." : "สุ่มคนแรก"}
+              {mainRoll.isRolling ? "กำลังลุ้น..." : mainStudent ? "สุ่มผู้เริ่มตอบใหม่" : "สุ่มผู้เริ่มตอบ"}
             </Button>
             <Button data-sound="off" variant="secondary" onClick={drawHelper} disabled={!mainStudent || mainRoll.isRolling || helperRoll.isRolling}>
               <HeartHandshake className="h-4 w-4" />
-              {helperRoll.isRolling ? "กำลังหาเพื่อน..." : "ขอเพื่อนช่วย"}
+              {helperRoll.isRolling ? "กำลังหาเพื่อน..." : helper ? "สุ่มเพื่อนช่วยใหม่" : "ขอเพื่อนช่วย"}
             </Button>
             <RepeatModeControl mode={repeatMode} onChange={setRepeatMode} disabled={mainRoll.isRolling || helperRoll.isRolling} />
           </div>

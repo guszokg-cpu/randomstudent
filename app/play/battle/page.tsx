@@ -34,7 +34,7 @@ export default function BattlePage() {
   const [pickedGroupIds, setPickedGroupIds] = useState<string[]>([]);
   const [pickedRepIdsByGroup, setPickedRepIdsByGroup] = useState<Record<string, string[]>>({});
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("unique");
-  const [pairRolling, setPairRolling] = useState(false);
+  const [rollingSide, setRollingSide] = useState<"both" | "left" | "right" | null>(null);
   const [savingBothGroups, setSavingBothGroups] = useState(false);
   const [toast, setToast] = useState("");
   const intervalRef = useRef<number | null>(null);
@@ -71,6 +71,7 @@ export default function BattlePage() {
       : rightRepPhotoUrl ?? primaryStudentPhoto(data.studentPhotos, displayRightRep)
     : null;
   const avoidRepeat = isUniqueMode(repeatMode);
+  const pairRolling = rollingSide !== null;
 
   useEffect(() => {
     return () => {
@@ -88,7 +89,9 @@ export default function BattlePage() {
     if (!first || !second) return;
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
-    setPairRolling(true);
+    setRollLeft(null);
+    setRollRight(null);
+    setRollingSide("both");
     setLeftRep(null);
     setRightRep(null);
     setLeftRepPhotoUrl(null);
@@ -111,11 +114,59 @@ export default function BattlePage() {
       setRollRight(null);
       setLeft(first);
       setRight(second);
-      setPairRolling(false);
+      setRollingSide(null);
       playRandomFinishSound();
       setPickedGroupIds((current) => nextPickedIds(current, [first.id, second.id], groups.length, avoidRepeat));
       void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, group_id: first.id, mode: "battle" });
       void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, group_id: second.id, mode: "battle" });
+    }, RANDOM_DRAW_DURATION_MS);
+  }
+
+  function drawGroup(side: "left" | "right") {
+    if (pairRolling || leftRepRoll.isRolling || rightRepRoll.isRolling || groups.length < 2) return;
+    const lockedGroup = side === "left" ? right : left;
+    const pool = lockedGroup ? groups.filter((group) => group.id !== lockedGroup.id) : groups;
+    const availablePicked = pickedGroupIds.filter((id) => pool.some((group) => group.id === id));
+    const excluded = excludedWhenUnique(availablePicked, pool.length, 1, avoidRepeat);
+    const winner = pickOne(pool, excluded, (group) => group.id);
+    if (!winner) return;
+
+    if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    if (side === "left") {
+      setRollLeft(null);
+      setLeftRep(null);
+      setLeftRepPhotoUrl(null);
+      leftRepRoll.reset();
+    } else {
+      setRollRight(null);
+      setRightRep(null);
+      setRightRepPhotoUrl(null);
+      rightRepRoll.reset();
+    }
+    setRollingSide(side);
+    playRandomStartSound(RANDOM_DRAW_DURATION_MS);
+
+    intervalRef.current = window.setInterval(() => {
+      const preview = pickOne(pool);
+      if (side === "left") setRollLeft(preview);
+      else setRollRight(preview);
+    }, 85);
+
+    timeoutRef.current = window.setTimeout(() => {
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      if (side === "left") {
+        setRollLeft(null);
+        setLeft(winner);
+      } else {
+        setRollRight(null);
+        setRight(winner);
+      }
+      setRollingSide(null);
+      playRandomFinishSound();
+      setPickedGroupIds((current) => nextPickedIds(current, [winner.id], groups.length, avoidRepeat));
+      void logRandom({ classroom_id: classroomId, subject_id: subjectId || null, group_id: winner.id, mode: "battle" });
     }, RANDOM_DRAW_DURATION_MS);
   }
 
@@ -220,12 +271,14 @@ export default function BattlePage() {
             group={displayLeft}
             rep={displayLeftRep}
             repPhotoUrl={displayLeftRepPhotoUrl}
-            rolling={pairRolling}
+            rolling={rollingSide === "both" || rollingSide === "left"}
             repRolling={leftRepRoll.isRolling}
             repTrail={leftRepRoll.trail.map((student) => student.nickname)}
             onDrawRep={() => drawRep(left, "left")}
             memberCount={leftMemberCount}
             onAward={() => void awardGroup(left, 1)}
+            onReroll={() => drawGroup("left")}
+            rerollDisabled={pairRolling || leftRepRoll.isRolling || rightRepRoll.isRolling || savingBothGroups}
           />
           <div className="grid place-items-center">
             <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-4xl font-black text-rose-500 shadow-2xl">
@@ -236,12 +289,14 @@ export default function BattlePage() {
             group={displayRight}
             rep={displayRightRep}
             repPhotoUrl={displayRightRepPhotoUrl}
-            rolling={pairRolling}
+            rolling={rollingSide === "both" || rollingSide === "right"}
             repRolling={rightRepRoll.isRolling}
             repTrail={rightRepRoll.trail.map((student) => student.nickname)}
             onDrawRep={() => drawRep(right, "right")}
             memberCount={rightMemberCount}
             onAward={() => void awardGroup(right, 1)}
+            onReroll={() => drawGroup("right")}
+            rerollDisabled={pairRolling || leftRepRoll.isRolling || rightRepRoll.isRolling || savingBothGroups}
           />
         </section>
         <div className="mt-5 flex justify-center">
@@ -264,6 +319,8 @@ function BattleCard({
   repRolling,
   repTrail,
   onDrawRep,
+  onReroll,
+  rerollDisabled,
   onAward,
   memberCount
 }: {
@@ -275,6 +332,8 @@ function BattleCard({
   repTrail: string[];
   memberCount: number;
   onDrawRep: () => void;
+  onReroll: () => void;
+  rerollDisabled: boolean;
   onAward: () => void;
 }) {
   return (
@@ -286,6 +345,10 @@ function BattleCard({
           </div>
           <p className="mt-4 text-5xl font-black">{group.name}</p>
           {rolling ? <RollTrail active labels={[group.name]} /> : null}
+          <Button data-sound="off" className="mt-4 w-full" variant="secondary" onClick={onReroll} disabled={rerollDisabled}>
+            <RefreshCcw className="h-4 w-4" />
+            สุ่มเฉพาะทีมนี้ใหม่
+          </Button>
           {rep ? (
             <div className="mx-auto mt-4 max-w-xs rounded-2xl bg-sky-50 p-4">
               <StudentAvatar name={rep.full_name} photoUrl={repPhotoUrl} size="lg" className="mx-auto" />
